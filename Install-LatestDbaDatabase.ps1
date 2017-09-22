@@ -63,6 +63,21 @@ foreach($instance in $instanceName) {
         Write-Verbose $file.FullName
         Invoke-Sqlcmd -ServerInstance $instance -Database DBA -InputFile $file.FullName
     }
+    #Then First Responder Kit
+    Write-Verbose "`n        ***Creating/Updating First Responder Kit `n"
+    $fileList = Get-ChildItem -Path .\oss\firstresponderkit -Recurse -Filter *.sql
+    Foreach ($file in $fileList){
+        Write-Verbose $file.FullName
+        Invoke-Sqlcmd -ServerInstance $instance -Database DBA -InputFile $file.FullName
+    }
+     #Then sp_whoisactive
+     Write-Verbose "`n        ***Creating/Updating sp_WhoIsAxctive `n"
+     $fileList = Get-ChildItem -Path .\oss\whoisactive -Recurse -Filter *.sql
+     Foreach ($file in $fileList){
+         Write-Verbose $file.FullName
+         Invoke-Sqlcmd -ServerInstance $instance -Database DBA -InputFile $file.FullName
+     }
+     # Ola's code isn't idempotent, so I can't automatically install them the same way. Balls.
 
 #That's it!
 }
