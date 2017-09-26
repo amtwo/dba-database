@@ -1,4 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_FileSize'))
+﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_FileSize'))
     EXEC ('CREATE PROCEDURE dbo.Check_FileSize AS SELECT ''This is a stub''')
 GO
 
@@ -73,8 +73,9 @@ IF (@OrderBy IS NULL
     -- sys.master_files will show the *starting* file size, not the actual file size.
     -- sys.sysfiles will show the *current* file size
     -- Using sys.sysfiles has the right current file size in all cases.
-INSERT #FileSizeInfo (ServerName, DbName, FileSizeMB, SpaceUsedMB, GrowthAmount, LogicalFileName, PhysicalFileName, FileType, FreeSpaceMB, FreeSpacePct) 
+
 EXEC sp_foreachdb @suppress_quotename = 1, @command = 'USE [?] 
+    INSERT #FileSizeInfo (ServerName, DbName, FileSizeMB, SpaceUsedMB, GrowthAmount, LogicalFileName, PhysicalFileName, FileType, FreeSpaceMB, FreeSpacePct) 
     SELECT @@servername as ServerName,   ''?'' AS DatabaseName,   
     CAST(f.size/128.0 AS decimal(20,2)) AS FileSize, 
     CASE
@@ -96,21 +97,21 @@ EXEC sp_foreachdb @suppress_quotename = 1, @command = 'USE [?]
     ' ;
  
 
-DECLARE @sql varchar(8000);
-SET @sql = 'SELECT * FROM  #FileSizeInfo WHERE 1=1';
+DECLARE @sql nvarchar(4000);
+SET @sql = N'SELECT * FROM  #FileSizeInfo WHERE 1=1';
 
 --Include optional filters
 IF @IncludeDataFiles = 0
-    SET @sql = @sql + ' AND FileType <> ''ROWS''';
+    SET @sql = @sql + N' AND FileType <> ''ROWS''';
 IF @IncludeLogFiles = 0
-    SET @sql = @sql + ' AND FileType <> ''LOG''';
+    SET @sql = @sql + N' AND FileType <> ''LOG''';
 IF @Drive IS NOT NULL
-    SET @sql = @sql + ' AND PhysicalFileName LIKE ''' + @Drive + '%''';
+    SET @sql = @sql + N' AND PhysicalFileName LIKE ''' + @Drive + N'%''';
 If @DbName IS NOT NULL
-    SET @sql = @sql + ' AND DbName	LIKE ''' + @DbName + '''';
+    SET @sql = @sql + N' AND DbName	LIKE ''' + @DbName + N'''';
 
 --include order by
-SET @sql = @sql + ' ORDER BY ' + @OrderBy;
+SET @sql = @sql + N' ORDER BY ' + @OrderBy;
 
 PRINT @sql;
 
