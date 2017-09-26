@@ -1,10 +1,10 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_AgLatency'))
+﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_AgLatency'))
     EXEC ('CREATE PROCEDURE dbo.Check_AgLatency AS SELECT ''This is a stub''')
 GO
 
 
 ALTER PROCEDURE dbo.Check_AgLatency 
-    @Threshold int = 5000
+	@Threshold int = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -20,40 +20,35 @@ EXAMPLES:
 MODIFICATIONS:
     20140804 - Start tracking Hardened LSN from DMV each time sproc runs. 
     20150107 - Add calculation for "minutes behind" to show how far behind primary a DB is
-**************************************************************************************************
-    This code is free to download and use for personal, educational, and internal 
-    corporate purposes, provided that this header is preserved. Redistribution or sale, 
-    in whole or in part, is prohibited without the author's express written consent.
-    ©2014-2017 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
 
 DECLARE 
-    @ProductVersion tinyint;
+	@ProductVersion tinyint;
 
 SET @ProductVersion = LEFT(CAST(SERVERPROPERTY('PRODUCTVERSION') AS varchar(20)),CHARINDEX('.',CAST(SERVERPROPERTY('PRODUCTVERSION') AS varchar(20)))-1)
 
 IF @ProductVersion < 11
 BEGIN
-    SELECT 'SQL Server version does not support AGs';
-    RETURN;
+	SELECT 'SQL Server version does not support AGs';
+	RETURN;
 END;
     
 CREATE TABLE #AgStatus ( --drop table #AgStatus
-    RunDate smalldatetime NOT NULL ,
-    ServerName sysname NOT NULL ,
-    AgName sysname NOT NULL,
+	RunDate smalldatetime NOT NULL ,
+	ServerName sysname NOT NULL ,
+	AgName sysname NOT NULL,
     DbName sysname NOT NULL ,
-    AgRole nvarchar(60) NULL,
-    SynchState nvarchar(60) NULL,
+	AgRole nvarchar(60) NULL,
+	SynchState nvarchar(60) NULL,
     AgHealth nvarchar(60) NULL,
     SuspendReason nvarchar(60) NULL,
-    SynchHardenedLSN numeric(25,0) NULL,
+	SynchHardenedLSN numeric(25,0) NULL,
     LastHardenedTime datetime2(3) NULL,
-    LastRedoneTime datetime2(3) NULL,
-    RedoEstSecCompletion bigint NULL,
-    LastCommitTime datetime2(3) NULL,
-    PRIMARY KEY  CLUSTERED (RunDate, ServerName, DBName)
+	LastRedoneTime datetime2(3) NULL,
+	RedoEstSecCompletion bigint NULL,
+	LastCommitTime datetime2(3) NULL,
+	PRIMARY KEY  CLUSTERED (RunDate, ServerName, DBName)
     );
 
 CREATE TABLE #SendStatus (
@@ -70,11 +65,11 @@ CREATE TABLE #Results (
     SynchState nvarchar(60),
     AgHealth nvarchar(60),
     SuspendReason nvarchar(60),
-    LastHardenedTime datetime2(3),
-    LastRedoneTime datetime2(3),
-    RedoEstSecCompletion bigint,
-    LastCommitTime datetime2(3),
-    MinutesBehind int,
+	LastHardenedTime datetime2(3),
+	LastRedoneTime datetime2(3),
+	RedoEstSecCompletion bigint,
+	LastCommitTime datetime2(3),
+	MinutesBehind int,
     SortOrder int
     );
 
@@ -91,30 +86,15 @@ INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, AgRole, SynchState, 
            ds.synchronization_health_desc COLLATE SQL_Latin1_General_CP1_CI_AS AS AgHealth, 
            ds. suspend_reason_desc        COLLATE SQL_Latin1_General_CP1_CI_AS AS SuspendReason, 
            ds.last_hardened_lsn  AS SynchHardenedLSN,
-           ds.last_hardened_time AS LastHardenedTime,
-           ds.last_redone_time AS LastRedoneTime,
-           CASE WHEN redo_rate = 0 THEN 0 ELSE ds.redo_queue_size/ds.redo_rate END AS RedoEstCompletion,
-           ds.last_commit_time AS LastCommitTime
+		   ds.last_hardened_time AS LastHardenedTime,
+		   ds.last_redone_time AS LastRedoneTime,
+		   CASE WHEN redo_rate = 0 THEN 0 ELSE ds.redo_queue_size/ds.redo_rate END AS RedoEstCompletion,
+		   ds.last_commit_time AS LastCommitTime
     FROM sys.dm_hadr_database_replica_states ds
     JOIN sys.availability_groups_cluster ag ON ag.group_id = ds.group_id
     JOIN sys.dm_hadr_availability_replica_cluster_states rcs ON rcs.replica_id = ds.replica_id
     JOIN sys.dm_hadr_availability_replica_states rs ON rs.replica_id = ds.replica_id;
-    
--- Grab a snapshot of the mirroring_failover_lsn & store it in Monitor_MirroringLSN
---Update the existing one if we already have a row, Insert it if it's missing
-UPDATE mon
-SET LogDateTime = sts.RunDate,
-    AgRole = sts.AgRole,
-    SynchState = sts.SynchState,
-    SynchHardenedLSN = sts.SynchHardenedLSN
-FROM Monitor_AgStatus mon
-JOIN #AgStatus sts ON mon.ServerName = sts.ServerName AND mon.DbName = sts.DBName
-WHERE mon.SynchHardenedLSN <> sts.SynchHardenedLSN;
-
-INSERT INTO Monitor_AgStatus (LogDateTime, ServerName, DbName, AgRole, SynchState, SynchHardenedLSN)
-SELECT RunDate, ServerName, DbName, AgRole, SynchState, SynchHardenedLSN
-FROM #AgStatus s
-WHERE NOT EXISTS (SELECT 1 FROM Monitor_AgStatus hadr WHERE hadr.ServerName = s.ServerName AND hadr.DbName = s.DbName);
+	
 
 
 --Lets make this easy, and create a temp table with the current status
@@ -141,19 +121,19 @@ SELECT COALESCE(ag.ServerName,'') AS ServerName,
        RTRIM(sync.DbName) AS DbName,
        MAX(sync.UnsentLogKb) AS UnsentLogKb,
        COALESCE(ag.SynchState,'') AS SynchState,
-       COALESCE(ag.AgHealth,'') AS AgHealth,
-       COALESCE(ag.SuspendReason,'') AS SuspendReason,
-       MAX(LastHardenedTime),
-       MAX(LastRedoneTime),
-       MAX(RedoEstSecCompletion),
-       MAX(LastCommitTime),
+	   COALESCE(ag.AgHealth,'') AS AgHealth,
+	   COALESCE(ag.SuspendReason,'') AS SuspendReason,
+	   MAX(LastHardenedTime),
+	   MAX(LastRedoneTime),
+	   MAX(RedoEstSecCompletion),
+	   MAX(LastCommitTime),
        CASE
-            WHEN RTRIM(sync.DbName) = '_Total' THEN 0
-            WHEN MAX(sync.UnsentLogKb) > '1000' THEN 2
-            WHEN COALESCE(ag.AgHealth,'') <> 'HEALTHY' THEN 3
+			WHEN RTRIM(sync.DbName) = '_Total' THEN 0
+			WHEN MAX(sync.UnsentLogKb) > '1000' THEN 2
+			WHEN COALESCE(ag.AgHealth,'') <> 'HEALTHY' THEN 3
             WHEN COALESCE(ag.SynchState,'') NOT IN ('SYNCHRONIZING','SYNCHRONIZED') THEN 4
-            ELSE 5
-        END AS SortOrder
+			ELSE 5
+		END AS SortOrder
 FROM #SendStatus AS sync
 LEFT JOIN #AgStatus AS ag ON sync.ServerName = ag.ServerName AND sync.DbName = ag.DbName 
 GROUP BY COALESCE(ag.ServerName,''),  COALESCE(ag.AgName,''), RTRIM(sync.DbName),COALESCE(ag.SynchState,''), COALESCE(ag.AgHealth,''), 
@@ -168,9 +148,9 @@ JOIN #Results r2 ON r2.AgName = r.AgName AND r2.DbName = r.DbName AND r2.LastHar
 
 --Output results
     IF NOT EXISTS (SELECT 1 FROM #Results)
-        SELECT 'No AGs Exist' AS AgStatus;
+    	SELECT 'No AGs Exist' AS AgStatus;
     ELSE
-        SELECT * 
+    	SELECT * 
         FROM #Results 
         WHERE UnsentLogKb >= @Threshold
         ORDER BY SortOrder, UnsentLogKb DESC, ServerName, DbName;
