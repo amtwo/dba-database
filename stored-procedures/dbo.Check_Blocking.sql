@@ -1,10 +1,10 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_Blocking'))
+﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_Blocking'))
     EXEC ('CREATE PROCEDURE dbo.Check_Blocking AS SELECT ''This is a stub''')
 GO
 
 
 ALTER PROCEDURE dbo.Check_Blocking 
-    @BlockingThreshold smallint = 60
+    @BlockingThreshold smallint = 5
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
