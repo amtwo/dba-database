@@ -14,16 +14,19 @@ Invoke-WebRequest -Uri "$($url)/IndexOptimize.sql" -OutFile "$($dir)\oss\olahall
 New-Item -Path "$($dir)\oss\firstresponderkit" -ItemType Directory -Force |Out-Null
 $url = "https://raw.githubusercontent.com/BrentOzarULTD/SQL-Server-First-Responder-Kit/master"
 Invoke-WebRequest -Uri "$($url)/sp_Blitz.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_Blitz.sql"
+Invoke-WebRequest -Uri "$($url)/sp_BlitzBackups.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzBackups.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzCache.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzCache.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzFirst.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzFirst.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzIndex.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzIndex.sql"
+Invoke-WebRequest -Uri "$($url)/sp_BlitzLock.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzLock.sql"
+Invoke-WebRequest -Uri "$($url)/sp_BlitzQueryStore.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzQueryStore.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzWho.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzWho.sql"
 Invoke-WebRequest -Uri "$($url)/sp_foreachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_foreachdb.sql"
 
 # sp_WhoIsActive
 New-Item -Path "$($dir)\oss\whoisactive" -ItemType Directory -Force |Out-Null
 # Adam packages this as a versioned zip, so need to update the URL every time he releases code. Balls.
-$url = "http://whoisactive.com/downloads/who_is_active_v11_17.zip"
+$url = "http://whoisactive.com/downloads/who_is_active_v11_20.zip"
 Invoke-WebRequest -Uri $url -OutFile "$($dir)\oss\whoisactive\sp_WhoIsActive.zip"
 # yuk, since the .sql file is versioned, delete the old ones before unzipping
 Remove-Item -Path "$($dir)\oss\whoisactive\*.*" -Exclude "sp_WhoIsActive.zip"
