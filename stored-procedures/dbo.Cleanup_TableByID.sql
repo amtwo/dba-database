@@ -21,6 +21,8 @@ CREATED: 20171012
     This procedure requires that the table have an ID column, AND some sort of date/time column.
     The ID is used for efficiency when doing deletes, and the date/time column is needed to
     determine when data ages out. 
+        **The date/time column should be the date inserted**
+          The code assumes that both the ID & date/time columns are ever-increasing.
     This includes two controls to help minimize blocking and prevent the transaction log from
     growing during a large data cleanup. These two params can be adjusted to fine-tune the cleanup
        @ChunkSize controls how the max size of each delete operation.
