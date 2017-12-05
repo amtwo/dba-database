@@ -71,7 +71,7 @@ foreach($instance in $instanceName) {
         Invoke-Sqlcmd -ServerInstance $instance -Database DBA -InputFile $file.FullName
     }
      #Then sp_whoisactive
-     Write-Verbose "`n        ***Creating/Updating sp_WhoIsAxctive `n"
+     Write-Verbose "`n        ***Creating/Updating sp_WhoIsActive `n"
      $fileList = Get-ChildItem -Path .\oss\whoisactive -Recurse -Filter *.sql
      Foreach ($file in $fileList){
          Write-Verbose $file.FullName

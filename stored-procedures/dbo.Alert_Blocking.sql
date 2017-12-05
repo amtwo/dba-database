@@ -1,5 +1,5 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_ProcPerf'))
-    EXEC ('CREATE PROCEDURE dbo.Check_ProcPerf AS SELECT ''This is a stub''')
+﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Alert_Blocking'))
+    EXEC ('CREATE PROCEDURE dbo.Alert_Blocking AS SELECT ''This is a stub''')
 GO
 
 ALTER PROCEDURE dbo.Alert_Blocking
