@@ -74,7 +74,7 @@ IF (@OrderBy IS NULL
     -- sys.sysfiles will show the *current* file size
     -- Using sys.sysfiles has the right current file size in all cases.
 
-EXEC sp_foreachdb @suppress_quotename = 1, @command = 'USE [?] 
+EXEC sp_foreachdb @suppress_quotename = 1, @state_desc = 'ONLINE', @command = 'USE [?] 
     INSERT #FileSizeInfo (ServerName, DbName, FileSizeMB, SpaceUsedMB, GrowthAmount, LogicalFileName, PhysicalFileName, FileType, FreeSpaceMB, FreeSpacePct) 
     SELECT @@servername as ServerName,   ''?'' AS DatabaseName,   
     CAST(f.size/128.0 AS decimal(20,2)) AS FileSize, 
