@@ -19,7 +19,8 @@ Invoke-WebRequest -Uri "$($url)/sp_BlitzCache.sql" -OutFile "$($dir)\oss\firstre
 Invoke-WebRequest -Uri "$($url)/sp_BlitzFirst.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzFirst.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzIndex.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzIndex.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzLock.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzLock.sql"
-Invoke-WebRequest -Uri "$($url)/sp_BlitzQueryStore.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzQueryStore.sql"
+#This throws errors when I try to deploy it to <2016 servers. Pulling it for now--will revisit later.
+#Invoke-WebRequest -Uri "$($url)/sp_BlitzQueryStore.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzQueryStore.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzWho.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzWho.sql"
 Invoke-WebRequest -Uri "$($url)/sp_foreachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_foreachdb.sql"
 
