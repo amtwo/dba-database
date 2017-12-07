@@ -17,5 +17,8 @@ BEGIN
     ALTER DATABASE  [DBA] SET READ_COMMITTED_SNAPSHOT ON;
     --set sa as owner
     ALTER AUTHORIZATION ON database::DBA TO sa;
+    --set to simple recovery on creation
+    --if you change this after creation, we won't change it back.
+    ALTER DATABASE DBA SET RECOVERY SIMPLE;
 END
 GO
