@@ -3,7 +3,8 @@
 GO
 
 ALTER PROCEDURE dbo.Alert_Blocking
-    @BlockingThreshold smallint = 60,
+    @BlockingDurationThreshold smallint = 60,
+    @BlockedSessionThreshold smallint = NULL,
     @EmailRecipients varchar(max) = 'you@yourdomain.com',
     @EmailThreshold smallint = 10,
     @Debug tinyint = 0
@@ -11,13 +12,14 @@ AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 CREATED: 20141218
-    This procedure checks for blocking exceeding a duration of @BlockingThreshold.
+    This procedure checks for blocking exceeding a duration of @BlockingDurationThreshold.
     Log the lead blocker to a table (only when not in @Debug mode).
     @Debug parameter controls whether to email blocking to @EmailRecipients or to output resultset.
     @EmailThreshold throttles email so that the server only sends email every N minutes.
 
 PARAMETERS
-* @BlockingThreshold - seconds - Alters when blocked sessions have been waiting longer than this many seconds.
+* @BlockingDurationThreshold - seconds - Alters when blocked sessions have been waiting longer than this many seconds.
+* @BlockedSessionThreshold - Alert if blocked session count.
 * @EmailRecipients   - delimited list of email addresses. Used for sending email alert.
 * @EmailThreshold    - minutes - Only send an email every this many minutes.
 * @Debug             - Supress sending email & output a resultset instead
@@ -43,6 +45,8 @@ MODIFICATIONS:
 SET NOCOUNT ON;
 --READ UNCOMMITTED, since we're dealing with blocking, we don't want to make things worse.
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+
+--Add a check that only one of the other BlockingDurationThreshold or BlockingDepthThreshold is specified.
 
 
 DECLARE @Id int = 1,
@@ -142,7 +146,7 @@ FROM sys.dm_exec_sessions s
 INNER JOIN sys.dm_exec_requests r ON r.session_id = s.session_id
 OUTER APPLY sys.dm_exec_sql_text (r.sql_handle) t
 WHERE r.blocking_session_id <> 0                --Blocked
-AND r.wait_time >= @BlockingThreshold*1000
+AND r.wait_time >= COALESCE(@BlockingDurationThreshold,0)*1000
 UNION 
 -- BLOCKERS
 SELECT s.session_id AS WaitingSpid, 
@@ -384,16 +388,21 @@ END;
 IF NOT EXISTS (SELECT 1 FROM #Blocked)
     RETURN (0);
 
+IF NOT EXISTS (SELECT 1 FROM #LeadingBlockers WHERE BlockedSpidCount > @BlockedSessionThreshold )
+BEGIN
+    RETURN (0):
+END;
+
 --Check EmailThreshold before continuing. RETURN within @EmailThreshold
 -- should this check be at the top of the alert?
-IF EXISTS (SELECT 1 FROM Monitor_Blocking WHERE LogDateTime >= DATEADD(mi,-1*@EmailThreshold,GETDATE()))
+IF EXISTS (SELECT 1 FROM dbo.Monitor_Blocking WHERE LogDateTime >= DATEADD(mi,-1*@EmailThreshold,GETDATE()))
     RETURN(0);
 
 -- Logging & Email Only happens when @Debug = 0
 IF @Debug = 0
 BEGIN
     --Log leading blockers to a real table, too.
-    INSERT INTO Monitor_Blocking (LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
+    INSERT INTO dbo.Monitor_Blocking (LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
                         LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount)
     SELECT LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
                         LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount
@@ -458,7 +467,7 @@ BEGIN
 
 
     SET @EmailSubject = 'ALERT: Blocking Detected';
-    SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + '@invaluable.com>';
+    SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + '@yourdomain.com>';
 
     EXEC msdb.dbo.sp_send_dbmail
         @recipients = @EmailRecipients,
