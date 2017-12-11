@@ -402,7 +402,7 @@ END;
 
 IF NOT EXISTS (SELECT 1 FROM #LeadingBlockers WHERE BlockedSpidCount > @BlockedSessionThreshold )
 BEGIN
-    RETURN (0):
+    RETURN (0);
 END;
 
 --Check EmailThreshold before continuing. RETURN within @EmailThreshold
