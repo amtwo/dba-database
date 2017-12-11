@@ -23,6 +23,11 @@ PARAMETERS
 * @EmailRecipients   - delimited list of email addresses. Used for sending email alert.
 * @EmailThreshold    - minutes - Only send an email every this many minutes.
 * @Debug             - Supress sending email & output a resultset instead
+                          0 = Send email
+                          1 = Suppress sending emails and suppress logging to dbo.Monitor_Blocking
+                                Output as result sets instead.
+                          2 = Suppress sending emails, but still log to dbo.Monitor_Blocking
+                                Output HTML text instead.
 **************************************************************************************************
 MODIFICATIONS:
     20141222 - AM2 - Parse out the Hex jobid in ProgramName & turn into the Job Name.
@@ -35,6 +40,8 @@ MODIFICATIONS:
                           - If a procedure is running, this is the specific statement within that proc
                3) InputBuffer - This is the output from DBCC INPUTBUFFER
                           - If a procedure is running, this is the EXEC statement
+    20171208 - AM2 - Add some functionality so that I can alert on number of sessions blocked.
+    20171210 - AM2 - Add Debug Mode = 2 to return the Email Body as a chunk of HTML instead of emailing it.
 
 **************************************************************************************************
     This code is free to download and use for personal, educational, and internal 
@@ -278,15 +285,19 @@ BEGIN
         --Now populate the WaitDescription column
         SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256)
         IF @WaitResource LIKE '%:%'
+        BEGIN
             UPDATE b
             SET WaitDescription = 'ROW WAIT: ' + @DbName + ' File: ' + @ObjectName + ' Page_id/Slot: ' + @WaitResource
             FROM #Blocked b
             WHERE WaitingSpid = @Spid;
+        END;
         ELSE
+        BEGIN
             UPDATE b
             SET WaitDescription = 'PAGE WAIT: ' + @DbName + ' File: ' + @ObjectName + ' Page_id: ' + @WaitResource
             FROM #Blocked b
             WHERE WaitingSpid = @Spid;
+        END;
     END;
     FETCH NEXT FROM wait_cur INTO @Spid, @WaitResource;
 END;
@@ -381,12 +392,13 @@ BEGIN
         SELECT * FROM #LeadingBlocker;
         SELECT * FROM #Blocked;
     END;
-
 END;
 
 -- If no rows returned, nothing to do... just return
 IF NOT EXISTS (SELECT 1 FROM #Blocked)
+BEGIN
     RETURN (0);
+END;
 
 IF NOT EXISTS (SELECT 1 FROM #LeadingBlockers WHERE BlockedSpidCount > @BlockedSessionThreshold )
 BEGIN
@@ -396,10 +408,12 @@ END;
 --Check EmailThreshold before continuing. RETURN within @EmailThreshold
 -- should this check be at the top of the alert?
 IF EXISTS (SELECT 1 FROM dbo.Monitor_Blocking WHERE LogDateTime >= DATEADD(mi,-1*@EmailThreshold,GETDATE()))
+BEGIN
     RETURN(0);
+END;
 
 -- Logging & Email Only happens when @Debug = 0
-IF @Debug = 0
+IF @Debug IN (0,2) 
 BEGIN
     --Log leading blockers to a real table, too.
     INSERT INTO dbo.Monitor_Blocking (LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
@@ -465,17 +479,25 @@ BEGIN
     SELECT @EmailBody = REPLACE(@EmailBody,'&lt;','<');
     SELECT @EmailBody = REPLACE(@EmailBody,'&gt;','>');
 
+    --In Debug Mode = 0, send the email
+    IF (@Debug = 0)
+    BEGIN
+        SET @EmailSubject = 'ALERT: Blocking Detected';
+        SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + '@yourdomain.com>';
 
-    SET @EmailSubject = 'ALERT: Blocking Detected';
-    SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + '@yourdomain.com>';
-
-    EXEC msdb.dbo.sp_send_dbmail
-        @recipients = @EmailRecipients,
-        @from_address = @EmailFrom,
-        @subject = @EmailSubject,
-        @body = @EmailBody,
-        @body_format = 'HTML',
-        @importance = 'High';
+        EXEC msdb.dbo.sp_send_dbmail
+            @recipients = @EmailRecipients,
+            @from_address = @EmailFrom,
+            @subject = @EmailSubject,
+            @body = @EmailBody,
+            @body_format = 'HTML',
+            @importance = 'High';
+    END;
+    --In Debug Mode = 2, just return the Email HTML as a single value resultset.
+    IF @Debug = 2
+    BEGIN
+        SELECT EmailBody = @EmailBody;
+    END;
 END;
 GO
 
