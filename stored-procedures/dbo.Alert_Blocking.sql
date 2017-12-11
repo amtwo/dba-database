@@ -400,7 +400,7 @@ BEGIN
     RETURN (0);
 END;
 
-IF NOT EXISTS (SELECT 1 FROM #LeadingBlockers WHERE BlockedSpidCount > @BlockedSessionThreshold )
+IF NOT EXISTS (SELECT 1 FROM #LeadingBlocker WHERE BlockedSpidCount > @BlockedSessionThreshold OR @BlockedSessionThreshold IS NULL)
 BEGIN
     RETURN (0);
 END;
