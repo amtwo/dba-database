@@ -18,8 +18,8 @@ CREATED: 20141218
     @EmailThreshold throttles email so that the server only sends email every N minutes.
 
 PARAMETERS
-* @BlockingDurationThreshold - seconds - Alters when blocked sessions have been waiting longer than this many seconds.
-* @BlockedSessionThreshold - Alert if blocked session count.
+* @BlockingDurationThreshold - seconds - Alters on blocked sessions that have been waiting longer than this many seconds.
+* @BlockedSessionThreshold - Alert on blocking only when the number of blocked sessions is this number of higher.
 * @EmailRecipients   - delimited list of email addresses. Used for sending email alert.
 * @EmailThreshold    - minutes - Only send an email every this many minutes.
 * @Debug             - Supress sending email & output a resultset instead
@@ -394,8 +394,15 @@ BEGIN
         SELECT 'No Blocking Detected' AS Blocking;
     ELSE
     BEGIN
-        SELECT * FROM #LeadingBlocker;
-        SELECT * FROM #Blocked;
+        SELECT * FROM #LeadingBlocker 
+        WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount)
+        ORDER BY LoginTime;
+        --
+        SELECT * FROM #Blocked b
+        WHERE EXISTS (SELECT 1 FROM #LeadingBlocker lb 
+                        WHERE lb.LeadingBlocker = b.LeadingBlocker
+                        AND lb.BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,lb.BlockedSpidCount))
+        ORDER BY b.WaitTime DESC;
     END;
 END;
 
@@ -405,7 +412,7 @@ BEGIN
     RETURN (0);
 END;
 
-IF NOT EXISTS (SELECT 1 FROM #LeadingBlocker WHERE BlockedSpidCount > @BlockedSessionThreshold OR @BlockedSessionThreshold IS NULL)
+IF NOT EXISTS (SELECT 1 FROM #LeadingBlocker WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount))
 BEGIN
     RETURN (0);
 END;
@@ -425,7 +432,8 @@ BEGIN
                         LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount)
     SELECT LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
                         LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount
-    FROM #LeadingBlocker lb;
+    FROM #LeadingBlocker lb
+    WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount);
 
     --Email about blocking
     -- TBD: Possibly email users if they are the leading blocker as well (based on loginname)?
@@ -451,6 +459,7 @@ BEGIN
                     td = LEFT(SqlStatement,300), '',    --Truncate string, too long for email alert
                     td = LEFT(InputBuffer,300), ''      --Truncate string, too long for email alert
                     FROM #LeadingBlocker
+                    WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount)
                     ORDER BY LoginTime
                     FOR XML PATH ('tr'), ELEMENTS
                     ) AS nvarchar(max)) +
@@ -474,6 +483,9 @@ BEGIN
                     td = LEFT(SqlStatement,300), '',    --Truncate string, too long for email alert
                     td = LEFT(InputBuffer,300), ''      --Truncate string, too long for email alert
                     FROM #Blocked b
+                    WHERE EXISTS (SELECT 1 FROM #LeadingBlocker lb 
+                                WHERE lb.LeadingBlocker = b.LeadingBlocker
+                                AND lb.BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,lb.BlockedSpidCount))
                     ORDER BY WaitTime desc
                     FOR XML PATH ('tr'), ELEMENTS
                     ) AS nvarchar(max)) +

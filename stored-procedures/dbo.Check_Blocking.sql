@@ -11,8 +11,8 @@ AUTHOR: Andy Mallon
 CREATED: 20141218
 
 PARAMETERS
-* @BlockingDurationThreshold - seconds - Alters when blocked sessions have been waiting longer than this many seconds.
-* @BlockedSessionThreshold - Alert if blocked session count.
+* @BlockingDurationThreshold - seconds - Shows blocked sessions that have been waiting longer than this many seconds.
+* @BlockedSessionThreshold - Shows blocking only when the number of blocked sessions is this number of higher.
 **************************************************************************************************
 MODIFICATIONS:
     20141222 - AM2 - Parse out the Hex jobid in ProgramName & turn into the Job Name.
@@ -40,9 +40,9 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 
 ---Sure, it would work if you supplied both, but the ANDing of those gets confusing to people, so easier to just do this.
 IF ((@BlockingDurationThreshold IS NOT NULL AND @BlockedSessionThreshold IS NOT NULL)
-    OR COALESCE(@BlockingDurationThreshold,@BlockedSessionThreshold) IS NULL)
+    OR COALESCE(@BlockingDurationThreshold, @BlockedSessionThreshold) IS NULL)
 BEGIN
-    RAISERROR('Must supply either @BlockingDurationThreshold or @BlockedSessionThreshold (but not both).',16,1)
+    RAISERROR('Must supply either @BlockingDurationThreshold or @BlockedSessionThreshold (but not both).',16,1);
 END;
 
 
@@ -388,12 +388,19 @@ SET SessionInfo = (SELECT WaitingSpid,
 FROM #Blocked b;
 
 --output results
-    IF NOT EXISTS (SELECT 1 FROM #LeadingBlocker UNION SELECT 1 FROM #Blocked)
+    IF NOT EXISTS (SELECT 1 FROM #LeadingBlocker WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount))
         SELECT 'No Blocking Detected' AS Blocking;
     ELSE
     BEGIN
-        SELECT * FROM #LeadingBlocker;
-        SELECT * FROM #Blocked;
+        SELECT * FROM #LeadingBlocker 
+        WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount)
+        ORDER BY LoginTime;
+        --
+        SELECT * FROM #Blocked b
+        WHERE EXISTS (SELECT 1 FROM #LeadingBlocker lb 
+                        WHERE lb.LeadingBlocker = b.LeadingBlocker
+                        AND lb.BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,lb.BlockedSpidCount))
+        ORDER BY b.WaitTime DESC;
     END;
 
 
