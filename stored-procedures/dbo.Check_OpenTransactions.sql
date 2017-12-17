@@ -10,6 +10,8 @@ AS
 AUTHOR: Andy Mallon
 CREATED: 20141218
     This procedure checks for locking exceeding a duration of @LockingThreshold.
+    Query to identify locks is based on query from Paul Randal:
+    https://www.sqlskills.com/blogs/paul/script-open-transactions-with-text-and-plans/
 
 PARAMETERS
 * @LockingThreshold - minutes - Alters when database locks have been holding log space
