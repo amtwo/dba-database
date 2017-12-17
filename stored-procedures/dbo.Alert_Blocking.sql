@@ -53,7 +53,12 @@ SET NOCOUNT ON;
 --READ UNCOMMITTED, since we're dealing with blocking, we don't want to make things worse.
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 
---Add a check that only one of the other BlockingDurationThreshold or BlockingDepthThreshold is specified.
+---Sure, it would work if you supplied both, but the ANDing of those gets confusing to people, so easier to just do this.
+IF ((@BlockingDurationThreshold IS NOT NULL AND @BlockedSessionThreshold IS NOT NULL)
+    OR COALESCE(@BlockingDurationThreshold,@BlockedSessionThreshold) IS NULL)
+BEGIN
+    RAISERROR('Must supply either @BlockingDurationThreshold or @BlockedSessionThreshold (but not both).',16,1)
+END;
 
 
 DECLARE @Id int = 1,

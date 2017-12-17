@@ -2,17 +2,17 @@
     EXEC ('CREATE PROCEDURE dbo.Check_Blocking AS SELECT ''This is a stub''')
 GO
 
-
-ALTER PROCEDURE dbo.Check_Blocking 
-    @BlockingThreshold smallint = 5
+ALTER PROCEDURE dbo.Check_Blocking
+    @BlockingDurationThreshold smallint = 60,
+    @BlockedSessionThreshold smallint = NULL
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 CREATED: 20141218
-    This procedure checks for blocking exceeding a duration of @BlockingThreshold.
 
 PARAMETERS
-* @BlockingThreshold - seconds - Alters when blocked sessions have been waiting longer than this many seconds.
+* @BlockingDurationThreshold - seconds - Alters when blocked sessions have been waiting longer than this many seconds.
+* @BlockedSessionThreshold - Alert if blocked session count.
 **************************************************************************************************
 MODIFICATIONS:
     20141222 - AM2 - Parse out the Hex jobid in ProgramName & turn into the Job Name.
@@ -25,6 +25,8 @@ MODIFICATIONS:
                           - If a procedure is running, this is the specific statement within that proc
                3) InputBuffer - This is the output from DBCC INPUTBUFFER
                           - If a procedure is running, this is the EXEC statement
+    20171208 - AM2 - Add some functionality so that I can alert on number of sessions blocked.
+    20171210 - AM2 - Add Debug Mode = 2 to return the Email Body as a chunk of HTML instead of emailing it.
 
 **************************************************************************************************
     This code is free to download and use for personal, educational, and internal 
@@ -35,6 +37,13 @@ MODIFICATIONS:
 SET NOCOUNT ON;
 --READ UNCOMMITTED, since we're dealing with blocking, we don't want to make things worse.
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+
+---Sure, it would work if you supplied both, but the ANDing of those gets confusing to people, so easier to just do this.
+IF ((@BlockingDurationThreshold IS NOT NULL AND @BlockedSessionThreshold IS NOT NULL)
+    OR COALESCE(@BlockingDurationThreshold,@BlockedSessionThreshold) IS NULL)
+BEGIN
+    RAISERROR('Must supply either @BlockingDurationThreshold or @BlockedSessionThreshold (but not both).',16,1)
+END;
 
 
 DECLARE @Id int = 1,
@@ -131,7 +140,7 @@ FROM sys.dm_exec_sessions s
 INNER JOIN sys.dm_exec_requests r ON r.session_id = s.session_id
 OUTER APPLY sys.dm_exec_sql_text (r.sql_handle) t
 WHERE r.blocking_session_id <> 0                --Blocked
-AND r.wait_time >= @BlockingThreshold*1000
+AND r.wait_time >= COALESCE(@BlockingDurationThreshold,0)*1000
 UNION 
 -- BLOCKERS
 SELECT s.session_id AS WaitingSpid, 
@@ -263,15 +272,19 @@ BEGIN
         --Now populate the WaitDescription column
         SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256)
         IF @WaitResource LIKE '%:%'
+        BEGIN
             UPDATE b
             SET WaitDescription = 'ROW WAIT: ' + @DbName + ' File: ' + @ObjectName + ' Page_id/Slot: ' + @WaitResource
             FROM #Blocked b
             WHERE WaitingSpid = @Spid;
+        END;
         ELSE
+        BEGIN
             UPDATE b
             SET WaitDescription = 'PAGE WAIT: ' + @DbName + ' File: ' + @ObjectName + ' Page_id: ' + @WaitResource
             FROM #Blocked b
             WHERE WaitingSpid = @Spid;
+        END;
     END;
     FETCH NEXT FROM wait_cur INTO @Spid, @WaitResource;
 END;
