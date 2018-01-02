@@ -183,8 +183,13 @@ BEGIN
 
     SET @Sql = 'DBCC INPUTBUFFER (' + CAST(@Spid AS varchar(10)) + ');';
 
-    INSERT INTO #InputBuffer
-    EXEC sp_executesql @sql;
+    BEGIN TRY
+        INSERT INTO #InputBuffer
+        EXEC sp_executesql @sql;
+    END TRY
+    BEGIN CATCH
+        PRINT 'InputBuffer Failed';
+    END CATCH
 
     --SELECT @id, @Spid, COALESCE((SELECT TOP 1 EventInfo FROM #InputBuffer),'')
     --EXEC sp_executesql @sql;
