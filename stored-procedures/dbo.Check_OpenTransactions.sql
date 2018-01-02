@@ -4,17 +4,17 @@ GO
 
 
 ALTER PROCEDURE dbo.Check_OpenTransactions
-    @LockingThreshold smallint = 1
+    @DurationThreshold smallint = 1
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 CREATED: 20141218
-    This procedure checks for locking exceeding a duration of @LockingThreshold.
+    This procedure checks for locking exceeding a duration of @DurationThreshold.
     Query to identify locks is based on query from Paul Randal:
     https://www.sqlskills.com/blogs/paul/script-open-transactions-with-text-and-plans/
 
 PARAMETERS
-* @LockingThreshold - minutes - Alters when database locks have been holding log space
+* @DurationThreshold - minutes - Alters when database locks have been holding log space
                        for this many minutes.
 **************************************************************************************************
 MODIFICATIONS:
@@ -38,7 +38,7 @@ MODIFICATIONS:
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 
---If we're in Debug mode, ignore @LockingThreshold parameter, Always use 1 minute.
+--If we're in Debug mode, ignore @DurationThreshold parameter, Always use 1 minute.
 DECLARE @Id int = 1,
         @Spid int = 0,
         @JobIdHex nvarchar(34),
@@ -50,7 +50,7 @@ DECLARE @Id int = 1,
 
 CREATE TABLE #OpenTrans (
     Id int identity(1,1) PRIMARY KEY,
-    WaitingSpid smallint,
+    Spid smallint,
     BlockingSpid smallint,
     TransactionLengthMinutes AS DATEDIFF(mi,TransactionStart,GETDATE()),
     DbName sysname,
@@ -81,9 +81,9 @@ CREATE TABLE #InputBuffer (
 
 --Grab all sessions with open transactions
 
-INSERT INTO #OpenTrans (WaitingSpid, BlockingSpid, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
+INSERT INTO #OpenTrans (Spid, BlockingSpid, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
                     LastRequestEnd, TransactionCnt, TransactionStart, TransactionState, Command, WaitTime, WaitResource, SqlText, SqlStatement)
-SELECT s.session_id AS WaitingSpid, 
+SELECT s.session_id AS Spid, 
        r.blocking_session_id AS BlockingSpid,
        COALESCE(db_name(dt.database_id),CAST(dt.database_id as nvarchar(10))) AS DbName,
        s.host_name AS HostName,
@@ -113,14 +113,14 @@ JOIN sys.dm_tran_database_transactions dt ON dt.transaction_id = st.transaction_
 LEFT JOIN sys.dm_exec_requests r ON r.session_id = s.session_id
 OUTER APPLY sys.dm_exec_sql_text (r.sql_handle) t
 WHERE dt.database_transaction_state NOT IN (3) -- 3 means transaction has been initialized but has not generated any log records. Ignore it
-AND COALESCE(dt.database_transaction_begin_time,s.last_request_start_time) < DATEADD(mi,-1*@LockingThreshold ,GETDATE());
+AND COALESCE(dt.database_transaction_begin_time,s.last_request_start_time) < DATEADD(mi,-1*@DurationThreshold ,GETDATE());
 
 -- Grab the input buffer for all sessions, too.
 WHILE EXISTS (SELECT 1 FROM #OpenTrans WHERE InputBuffer IS NULL)
 BEGIN
     TRUNCATE TABLE #InputBuffer;
     
-    SELECT TOP 1 @Spid = WaitingSpid, @Id = Id
+    SELECT TOP 1 @Spid = Spid, @Id = Id
     FROM #OpenTrans
     WHERE InputBuffer IS NULL;
 
@@ -168,10 +168,14 @@ SET SessionInfo = (SELECT TransactionState =
                                             WHEN 12 THEN 'The transaction is being committed. In this state the log record is being generated, but it has not been materialized or persisted.'
                                             ELSE CAST(TransactionState as varchar)
                                       END,
+                            TransactionLengthMinutes = CONVERT(varchar(20),TransactionLengthMinutes,20),
+                            SessionID = Spid,
+                            DbName,
                             LoginName,
                             HostName,
                             DbName,
                             WaitResource,
+                            LoginTime = CONVERT(varchar(20),LoginTime,20),
                             LastRequest = CONVERT(varchar(20),LastRequestStart,20),
                             ProgramName
                     FROM #OpenTrans t2 
@@ -182,7 +186,7 @@ FROM #OpenTrans t;
 
 --output results in debug mode:
     IF NOT EXISTS (SELECT 1 FROM #OpenTrans)
-        SELECT 'No Open Transactions longer than ' + CAST(@LockingThreshold AS varchar(10)) + ' minutes exist' AS OpenTransactions;
+        SELECT 'No Open Transactions longer than ' + CAST(@DurationThreshold AS varchar(10)) + ' minutes exist' AS OpenTransactions;
     ELSE
     BEGIN
         SELECT * FROM #OpenTrans;
