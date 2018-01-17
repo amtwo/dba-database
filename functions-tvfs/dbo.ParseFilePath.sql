@@ -9,7 +9,7 @@ RETURNS TABLE
 AUTHOR: Andy Mallon
 CREATED: 20180114
     Parses a full file path into separate file & path values. 
-    Also include the file extension, because why not?
+    Also include the bare file name & file extension, because why not?
 PARAMETERS:
     @FilePath - Text string of a complete file & path
 EXAMPLES:
@@ -27,6 +27,9 @@ AS
 RETURN
     SELECT DirectoryPath = LEFT (@FilePath, LEN(@FilePath) - CHARINDEX('\', REVERSE(@FilePath), 1) + 1), 
            FileName      = RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1),
+           BareFileName  = LEFT(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1), 
+                                LEN(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1)) 
+                                    - CHARINDEX('.', REVERSE(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1))) ),
            FileExtension = RIGHT(@FilePath, CHARINDEX('.', REVERSE(@FilePath)) -1);
 GO
 
