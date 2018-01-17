@@ -26,7 +26,7 @@ MODIFICATIONS:
 AS
 RETURN
     SELECT DirectoryPath = LEFT (@FilePath, LEN(@FilePath) - CHARINDEX('\', REVERSE(@FilePath), 1) + 1), 
-           FileName      = RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1),
+           FullFileName  = RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1),
            BareFileName  = LEFT(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1), 
                                 LEN(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1)) 
                                     - CHARINDEX('.', REVERSE(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1))) ),
