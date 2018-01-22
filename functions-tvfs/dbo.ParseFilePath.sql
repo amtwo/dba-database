@@ -1,4 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.ParseFilePath'))
+﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.ParseFilePath'))
     EXEC ('CREATE FUNCTION dbo.ParseFilePath() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' )
 GO
 
@@ -21,16 +21,28 @@ MODIFICATIONS:
     This code is free to download and use for personal, educational, and internal 
     corporate purposes, provided that this header is preserved. Redistribution or sale, 
     in whole or in part, is prohibited without the author's express written consent.
-    ©2014-2017 ● Andy Mallon ● am2.co
+    ©2014-2018 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 AS
 RETURN
-    SELECT DirectoryPath = LEFT (@FilePath, LEN(@FilePath) - CHARINDEX('\', REVERSE(@FilePath), 1) + 1), 
-           FullFileName  = RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1),
-           BareFileName  = LEFT(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1), 
-                                LEN(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1)) 
-                                    - CHARINDEX('.', REVERSE(RIGHT(@FilePath, CHARINDEX('\', REVERSE(@FilePath)) -1))) ),
-           FileExtension = RIGHT(@FilePath, CHARINDEX('.', REVERSE(@FilePath)) -1);
+    WITH ParseInfo AS(
+        SELECT FilePath      = @FilePath,
+               PathLen       = LEN(@FilePath),
+               FinalSlashPos = CHARINDEX('\', REVERSE(@FilePath), 1)
+        ),
+        ParsedPaths AS (
+        SELECT DirectoryPath = LEFT (FilePath, PathLen - FinalSlashPos + 1),
+               FullFileName  = RIGHT(FilePath, FinalSlashPos - 1),
+               FileExtension = RIGHT(FilePath, CHARINDEX('.', REVERSE(FilePath)) -1),
+               *
+        FROM ParseInfo
+        )
+    SELECT DirectoryPath,
+           FullFileName,
+           BareFilename = LEFT(FullFilename,LEN(FullFilename)-(LEN(FileExtension)+1)),
+           FileExtension
+    FROM ParsedPaths;
+
 GO
 
 
