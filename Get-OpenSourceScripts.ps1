@@ -27,7 +27,7 @@ Invoke-WebRequest -Uri "$($url)/sp_foreachdb.sql" -OutFile "$($dir)\oss\firstres
 # sp_WhoIsActive
 New-Item -Path "$($dir)\oss\whoisactive" -ItemType Directory -Force |Out-Null
 # Adam packages this as a versioned zip, so need to update the URL every time he releases code. Balls.
-$url = "http://whoisactive.com/downloads/who_is_active_v11_20.zip"
+$url = "http://whoisactive.com/downloads/who_is_active_v11_30.zip"
 Invoke-WebRequest -Uri $url -OutFile "$($dir)\oss\whoisactive\sp_WhoIsActive.zip"
 # yuk, since the .sql file is versioned, delete the old ones before unzipping
 Remove-Item -Path "$($dir)\oss\whoisactive\*.*" -Exclude "sp_WhoIsActive.zip"

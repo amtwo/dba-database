@@ -75,9 +75,15 @@ foreach($instance in $instanceName) {
      $fileList = Get-ChildItem -Path .\oss\whoisactive -Recurse -Filter *.sql
      Foreach ($file in $fileList){
          Write-Verbose $file.FullName
+         Invoke-Sqlcmd -ServerInstance $instance -Database master -InputFile $file.FullName
+     }
+     ## WOO HOO! Ola's code isn't idempotent now!
+     Write-Verbose "`n        ***Creating/Updating Ola Hallengren Maintenance Solution `n"
+     $fileList = Get-ChildItem -Path .\oss\olahallengren -Recurse -Filter *.sql
+     Foreach ($file in $fileList){
+         Write-Verbose $file.FullName
          Invoke-Sqlcmd -ServerInstance $instance -Database DBA -InputFile $file.FullName
      }
-     # Ola's code isn't idempotent, so I can't automatically install them the same way. Balls.
 
 #That's it!
 }
