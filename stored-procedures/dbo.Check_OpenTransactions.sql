@@ -30,10 +30,9 @@ MODIFICATIONS:
                           - If a procedure is running, this is the EXEC statement
 
 **************************************************************************************************
-    This code is free to download and use for personal, educational, and internal 
-    corporate purposes, provided that this header is preserved. Redistribution or sale, 
-    in whole or in part, is prohibited without the author's express written consent.
-    ©2014-2017 ● Andy Mallon ● am2.co
+    This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
+    https://github.com/amtwo/dba-database/blob/master/LICENSE
+    ©2014-2019 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
