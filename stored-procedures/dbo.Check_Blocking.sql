@@ -12,7 +12,7 @@ CREATED: 20141218
 
 PARAMETERS
 * @BlockingDurationThreshold - seconds - Shows blocked sessions that have been waiting longer than this many seconds.
-* @BlockedSessionThreshold - Shows blocking only when the number of blocked sessions is this number of higher.
+* @BlockedSessionThreshold - Shows blocking only when the number of blocked sessions is this number or higher.
 **************************************************************************************************
 MODIFICATIONS:
     20141222 - AM2 - Parse out the Hex jobid in ProgramName & turn into the Job Name.
