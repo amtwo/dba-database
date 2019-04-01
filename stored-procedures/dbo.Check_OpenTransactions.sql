@@ -4,7 +4,8 @@ GO
 
 
 ALTER PROCEDURE dbo.Check_OpenTransactions
-    @DurationThreshold smallint = 1
+    @DurationThreshold smallint = 1,
+    @OnlySleepingSessions bit = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -16,6 +17,7 @@ CREATED: 20141218
 PARAMETERS
 * @DurationThreshold - minutes - Alters when database locks have been holding log space
                        for this many minutes.
+* @OnlySleepingSessions - bit - Only show sessions that are sleeping
 **************************************************************************************************
 MODIFICATIONS:
     20141222 - AM2 - Parse out the Hex jobid in ProgramName & turn into the Job Name.
@@ -28,7 +30,7 @@ MODIFICATIONS:
                           - If a procedure is running, this is the specific statement within that proc
                3) InputBuffer - This is the output from DBCC INPUTBUFFER
                           - If a procedure is running, this is the EXEC statement
-
+    20190401 - AM2 - Add filter to only include sleeping sessions in results
 **************************************************************************************************
     This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -112,6 +114,7 @@ JOIN sys.dm_tran_database_transactions dt ON dt.transaction_id = st.transaction_
 LEFT JOIN sys.dm_exec_requests r ON r.session_id = s.session_id
 OUTER APPLY sys.dm_exec_sql_text (r.sql_handle) t
 WHERE dt.database_transaction_state NOT IN (3) -- 3 means transaction has been initialized but has not generated any log records. Ignore it
+AND (@OnlySleepingSessions = 0 OR s.status = 'sleeping')
 AND COALESCE(dt.database_transaction_begin_time,s.last_request_start_time) < DATEADD(mi,-1*@DurationThreshold ,GETDATE());
 
 -- Grab the input buffer for all sessions, too.
