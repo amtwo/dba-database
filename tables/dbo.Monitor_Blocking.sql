@@ -20,7 +20,7 @@ BEGIN
         SqlText nvarchar(max) NULL,
         InputBuffer nvarchar(4000) NULL,
         SqlStatement nvarchar(max) NULL,
-        CONSTRAINT PK_cfn_Monitor_Blocking PRIMARY KEY CLUSTERED (LogDateTime,LogId )
+        CONSTRAINT PK_Monitor_Blocking PRIMARY KEY CLUSTERED (LogDateTime,LogId )
     ) ON [DATA];
 END
 GO
