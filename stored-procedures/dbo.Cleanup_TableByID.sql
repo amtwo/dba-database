@@ -28,6 +28,8 @@ CREATED: 20171012
        @ChunkSize controls how the max size of each delete operation.
        @LoopWaitTime introduces a wait between each delete to throttle activity between log backups
 
+    KNOWN LIMITATION: If you reseed the identity column back to 0, you're going to delete all
+        your data. All of it. Don't do that.
 
 PARAMETERS
 * @DbName         - Name of the database containing the table
