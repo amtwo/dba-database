@@ -40,7 +40,7 @@ foreach($instance in $instanceName) {
     $fileList = Get-ChildItem -Path .\tables -Recurse
     Foreach ($file in $fileList){
         Write-Verbose $file.FullName
-        Invoke-Sqlcmd -ServerInstance $instance -Database DBA -InputFile $file.FullName
+        Invoke-Sqlcmd -ServerInstance $instance -Database DBA -InputFile $file.FullName -QueryTimeout 300
     }
     #Then scalar functions
     Write-Verbose "`n        ***Creating/Updating Scalar Functions `n"

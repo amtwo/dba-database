@@ -12,7 +12,7 @@ CREATED: 20141218
 
 PARAMETERS
 * @BlockingDurationThreshold - seconds - Shows blocked sessions that have been waiting longer than this many seconds.
-* @BlockedSessionThreshold - Shows blocking only when the number of blocked sessions is this number of higher.
+* @BlockedSessionThreshold - Shows blocking only when the number of blocked sessions is this number or higher.
 **************************************************************************************************
 MODIFICATIONS:
     20141222 - AM2 - Parse out the Hex jobid in ProgramName & turn into the Job Name.
@@ -29,10 +29,9 @@ MODIFICATIONS:
     20171210 - AM2 - Add Debug Mode = 2 to return the Email Body as a chunk of HTML instead of emailing it.
 
 **************************************************************************************************
-    This code is free to download and use for personal, educational, and internal 
-    corporate purposes, provided that this header is preserved. Redistribution or sale, 
-    in whole or in part, is prohibited without the author's express written consent.
-    ©2014-2017 ● Andy Mallon ● am2.co
+    This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
+    https://github.com/amtwo/dba-database/blob/master/LICENSE
+    ©2014-2019 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
 --READ UNCOMMITTED, since we're dealing with blocking, we don't want to make things worse.

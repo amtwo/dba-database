@@ -17,10 +17,9 @@ EXAMPLES:
 MODIFICATIONS:
     20160218 - More info here: https://am2.co/2016/02/xp_sqlagent_enum_jobs_alt/
 **************************************************************************************************
-    This code is free to download and use for personal, educational, and internal 
-    corporate purposes, provided that this header is preserved. Redistribution or sale, 
-    in whole or in part, is prohibited without the author's express written consent.
-    ©2014-2017 ● Andy Mallon ● am2.co
+    This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
+    https://github.com/amtwo/dba-database/blob/master/LICENSE
+    ©2014-2019 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 AS
 RETURN

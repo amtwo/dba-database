@@ -28,6 +28,8 @@ CREATED: 20171012
        @ChunkSize controls how the max size of each delete operation.
        @LoopWaitTime introduces a wait between each delete to throttle activity between log backups
 
+    KNOWN LIMITATION: If you reseed the identity column back to 0, you're going to delete all
+        your data. All of it. Don't do that.
 
 PARAMETERS
 * @DbName         - Name of the database containing the table
@@ -43,10 +45,9 @@ PARAMETERS
 MODIFICATIONS:
     YYYYMMDD - 
 **************************************************************************************************
-    This code is free to download and use for personal, educational, and internal 
-    corporate purposes, provided that this header is preserved. Redistribution or sale, 
-    in whole or in part, is prohibited without the author's express written consent.
-    ©2014-2017 ● Andy Mallon ● am2.co
+    This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
+    https://github.com/amtwo/dba-database/blob/master/LICENSE
+    ©2014-2019 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
 

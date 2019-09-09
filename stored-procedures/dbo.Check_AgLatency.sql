@@ -20,6 +20,10 @@ EXAMPLES:
 MODIFICATIONS:
     20140804 - Start tracking Hardened LSN from DMV each time sproc runs. 
     20150107 - Add calculation for "minutes behind" to show how far behind primary a DB is
+**************************************************************************************************
+    This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
+    https://github.com/amtwo/dba-database/blob/master/LICENSE
+    ©2014-2019 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
 
