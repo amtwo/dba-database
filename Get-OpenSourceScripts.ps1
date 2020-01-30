@@ -22,7 +22,9 @@ Invoke-WebRequest -Uri "$($url)/sp_BlitzLock.sql" -OutFile "$($dir)\oss\firstres
 #This throws errors when I try to deploy it to <2016 servers. Pulling it for now--will revisit later.
 #Invoke-WebRequest -Uri "$($url)/sp_BlitzQueryStore.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzQueryStore.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzWho.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzWho.sql"
-Invoke-WebRequest -Uri "$($url)/sp_foreachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_foreachdb.sql"
+#sp_foreachdb was deprecated in September 2019
+#Invoke-WebRequest -Uri "$($url)/sp_foreachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_foreachdb.sql"
+Invoke-WebRequest -Uri "$($url)/sp_ineachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_ineachdb.sql"
 
 # sp_WhoIsActive
 New-Item -Path "$($dir)\oss\whoisactive" -ItemType Directory -Force |Out-Null
