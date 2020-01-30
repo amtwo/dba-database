@@ -50,7 +50,7 @@ CREATE TABLE #LogInfo
 
 
 --INSERT INTO #Results (DbName, LogFileName, PhysicalName, Growth)
-EXEC sp_foreachdb @suppress_quotename = 1, @command = 'INSERT INTO #Results (DbName, LogFileName, PhysicalName, Growth)
+EXEC sp_ineachdb @suppress_quotename = 1, @command = 'INSERT INTO #Results (DbName, LogFileName, PhysicalName, Growth)
       SELECT ''?'' , name, physical_name,
             CASE WHEN growth  = 0 THEN ''fixed'' ELSE
               CASE WHEN is_percent_growth = 0 THEN CONVERT(varchar(10), (growth/128)) + '' MB''
