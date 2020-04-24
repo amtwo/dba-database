@@ -44,9 +44,9 @@ MODIFICATIONS:
     20171210 - AM2 - Add Debug Mode = 2 to return the Email Body as a chunk of HTML instead of emailing it.
 
 **************************************************************************************************
-    This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
+    This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
-    ©2014-2019 ● Andy Mallon ● am2.co
+    ©2014-2020 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
 --READ UNCOMMITTED, since we're dealing with blocking, we don't want to make things worse.
