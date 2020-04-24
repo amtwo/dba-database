@@ -4,11 +4,11 @@ GO
 
 
 ALTER PROCEDURE dbo.Check_FileSize
-    @DbName sysname = NULL, 
+    @DbName sysname = NULL,
     @Drive char(1) = NULL,
     @IncludeDataFiles bit = 1,
     @IncludeLogFiles bit = 1,
-    @OrderBy varchar(100) = NULL
+    @OrderBy nvarchar(100) = NULL
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -34,6 +34,9 @@ EXAMPLES:
 **************************************************************************************************
 MODIFICATIONS:
        20140101 - Initials - Modification description
+       20200424 - AM2 - Update to pass @DbName to sp_foreachdb like a big boy, instead of
+                    just querying on the output table. This is a big difference on servers with
+                    many databases
        
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
@@ -63,7 +66,12 @@ IF (@OrderBy IS NULL
             WHERE value NOT IN (SELECT name FROM tempdb.sys.columns WHERE object_id = object_id('tempdb..#FileSizeInfo') )
         ))
     SET @OrderBy = 'ServerName, DbName, LogicalFileName';
- 
+
+IF @DbName IS NULL
+BEGIN
+    SET @DbName = N'%';
+END
+
 -- Because of log-shipped databases, we want to use sys.master_files for the file location NOT sys.sysfiles
     -- sys.master_files will show the location on *this* server. 
     -- sys.sysfiles in the DB will show the location of the files on the *primary* server.
@@ -73,7 +81,11 @@ IF (@OrderBy IS NULL
     -- sys.sysfiles will show the *current* file size
     -- Using sys.sysfiles has the right current file size in all cases.
 
-EXEC sp_foreachdb @suppress_quotename = 1, @state_desc = 'ONLINE', @command = 'USE [?] 
+EXEC sp_foreachdb 
+        @suppress_quotename = 1, 
+        @state_desc = 'ONLINE', 
+        @name_pattern = @DbName, 
+        @command = 'USE [?] 
     INSERT #FileSizeInfo (ServerName, DbName, FileSizeMB, SpaceUsedMB, GrowthAmount, LogicalFileName, PhysicalFileName, FileType, FreeSpaceMB, FreeSpacePct) 
     SELECT @@servername as ServerName,   ''?'' AS DatabaseName,   
     CAST(f.size/128.0 AS decimal(20,2)) AS FileSize, 
@@ -106,8 +118,6 @@ IF @IncludeLogFiles = 0
     SET @sql = @sql + N' AND FileType <> ''LOG''';
 IF @Drive IS NOT NULL
     SET @sql = @sql + N' AND PhysicalFileName LIKE ''' + @Drive + N'%''';
-If @DbName IS NOT NULL
-    SET @sql = @sql + N' AND DbName	LIKE ''' + @DbName + N'''';
 
 --include order by
 SET @sql = @sql + N' ORDER BY ' + @OrderBy;
