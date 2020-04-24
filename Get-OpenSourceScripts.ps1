@@ -22,13 +22,10 @@ Invoke-WebRequest -Uri "$($url)/sp_BlitzLock.sql" -OutFile "$($dir)\oss\firstres
 #This throws errors when I try to deploy it to <2016 servers. Pulling it for now--will revisit later.
 #Invoke-WebRequest -Uri "$($url)/sp_BlitzQueryStore.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzQueryStore.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzWho.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzWho.sql"
-Invoke-WebRequest -Uri "$($url)/sp_foreachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_foreachdb.sql"
+Invoke-WebRequest -Uri "$($url)/Deprecated/sp_foreachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_foreachdb.sql"
+Invoke-WebRequest -Uri "$($url)/sp_ineachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_ineachdb.sql"
 
 # sp_WhoIsActive
 New-Item -Path "$($dir)\oss\whoisactive" -ItemType Directory -Force |Out-Null
-# Adam packages this as a versioned zip, so need to update the URL every time he releases code. Balls.
-$url = "http://whoisactive.com/downloads/who_is_active_v11_30.zip"
-Invoke-WebRequest -Uri $url -OutFile "$($dir)\oss\whoisactive\sp_WhoIsActive.zip"
-# yuk, since the .sql file is versioned, delete the old ones before unzipping
-Remove-Item -Path "$($dir)\oss\whoisactive\*.*" -Exclude "sp_WhoIsActive.zip"
-Expand-Archive -Path "$($dir)\oss\whoisactive\sp_WhoIsActive.zip" -DestinationPath "$($dir)\oss\WhoIsActive" -Force
+$url = "https://raw.githubusercontent.com/amachanic/sp_whoisactive/master/who_is_active.sql"
+Invoke-WebRequest -Uri $url -OutFile "$($dir)\oss\whoisactive\who_is_active.sql"

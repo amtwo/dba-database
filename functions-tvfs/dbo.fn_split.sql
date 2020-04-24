@@ -10,6 +10,9 @@ AUTHOR: Andy Mallon
 CREATED: 20140420
     Convert a delimited string (any delimiter can be passed, default assumes CSV.
     Use method of converting the CSV value into an XML document to make shredding more efficient.
+
+    If you are using SQL Server 2016 or later, with compatibility level 130 or higher, 
+    use STRING_SPLIT() instead.
 PARAMETERS:
     @Text - Text string of delimited text
     @Token - Default , - Delimited used to parse the @Text string
@@ -20,9 +23,9 @@ EXAMPLES:
 MODIFICATIONS:
     YYYYMMDD -
 **************************************************************************************************
-    This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
+    This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
-    ©2014-2019 ● Andy Mallon ● am2.co
+    ©2014-2020 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 AS
 RETURN

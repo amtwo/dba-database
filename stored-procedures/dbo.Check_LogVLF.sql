@@ -22,9 +22,9 @@ EXAMPLES:
 MODIFICATIONS:
     20150107 - 
 **************************************************************************************************
-    This code is licensed under the GNU GPL, as part of Andy Mallon's DBA Database.
+    This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
-    ©2014-2019 ● Andy Mallon ● am2.co
+    ©2014-2020 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
 

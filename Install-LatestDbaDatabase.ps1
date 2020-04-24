@@ -21,6 +21,8 @@ Install-LatestDbaDatabase AM2Prod
 .NOTES
 AUTHOR: Andy Mallon
 DATE: 20170922
+COPYRIGHT: This code is licensed as part of Andy Mallon's DBA Database. https://github.com/amtwo/dba-database/blob/master/LICENSE
+©2014-2020 ● Andy Mallon ● am2.co
 #>
  
 [CmdletBinding()]
