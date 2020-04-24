@@ -3,7 +3,7 @@ $dir = Get-Location
 
 # Ola Hallengren's maintenance scripts
 New-Item -Path "$($dir)\oss\olahallengren" -ItemType Directory -Force |Out-Null
-$url = "https://ola.hallengren.com/script.s"
+$url = "https://ola.hallengren.com/scripts"
 Invoke-WebRequest -Uri "$($url)/CommandExecute.sql" -OutFile "$($dir)\oss\olahallengren\CommandExecute.sql"
 Invoke-WebRequest -Uri "$($url)/CommandLog.sql" -OutFile "$($dir)\oss\olahallengren\CommandLog.sql"
 Invoke-WebRequest -Uri "$($url)/DatabaseBackup.sql" -OutFile "$($dir)\oss\olahallengren\DatabaseBackup.sql"
