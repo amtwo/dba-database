@@ -3,7 +3,7 @@ $dir = Get-Location
 
 # Ola Hallengren's maintenance scripts
 New-Item -Path "$($dir)\oss\olahallengren" -ItemType Directory -Force |Out-Null
-$url = "https://ola.hallengren.com/scripts"
+$url = "https://ola.hallengren.com/script.s"
 Invoke-WebRequest -Uri "$($url)/CommandExecute.sql" -OutFile "$($dir)\oss\olahallengren\CommandExecute.sql"
 Invoke-WebRequest -Uri "$($url)/CommandLog.sql" -OutFile "$($dir)\oss\olahallengren\CommandLog.sql"
 Invoke-WebRequest -Uri "$($url)/DatabaseBackup.sql" -OutFile "$($dir)\oss\olahallengren\DatabaseBackup.sql"
@@ -27,9 +27,5 @@ Invoke-WebRequest -Uri "$($url)/sp_ineachdb.sql" -OutFile "$($dir)\oss\firstresp
 
 # sp_WhoIsActive
 New-Item -Path "$($dir)\oss\whoisactive" -ItemType Directory -Force |Out-Null
-# Adam packages this as a versioned zip, so need to update the URL every time he releases code. Balls.
-$url = "http://whoisactive.com/downloads/who_is_active_v11_30.zip"
-Invoke-WebRequest -Uri $url -OutFile "$($dir)\oss\whoisactive\sp_WhoIsActive.zip"
-# yuk, since the .sql file is versioned, delete the old ones before unzipping
-Remove-Item -Path "$($dir)\oss\whoisactive\*.*" -Exclude "sp_WhoIsActive.zip"
-Expand-Archive -Path "$($dir)\oss\whoisactive\sp_WhoIsActive.zip" -DestinationPath "$($dir)\oss\WhoIsActive" -Force
+$url = "https://raw.githubusercontent.com/amachanic/sp_whoisactive/master/who_is_active.sql"
+Invoke-WebRequest -Uri $url -OutFile "$($dir)\oss\whoisactive\who_is_active.sql"
