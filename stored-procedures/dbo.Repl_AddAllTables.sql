@@ -37,8 +37,8 @@ CREATE TABLE #article (
 
 --Get all unpublished tables that have a PK
 SET @sql = N'SELECT t.name
-        FROM [' + @PubDbName + '].sys.objects t
-        JOIN [' + @PubDbName + '].sys.objects pk ON pk.parent_object_id = t.object_id
+        FROM ' + QUOTENAME(@PubDbName0 + '.sys.objects t
+        JOIN ' + QUOTENAME(@PubDbName0 + '.sys.objects pk ON pk.parent_object_id = t.object_id
         WHERE t.is_ms_shipped = 0
         AND t.is_published = 0
         AND t.name NOT IN (' + COALESCE(@ExcludeTables,'''''') + ')
@@ -69,7 +69,7 @@ END;
 CLOSE article_cur;
 DEALLOCATE article_cur;
 
-DROP TABLE #article
+DROP TABLE #article;
 GO
 
 
