@@ -18,9 +18,7 @@ PARAMETERS
                 number of VLFs, in case you don't care about those.
 EXAMPLES:
 
-**************************************************************************************************
-MODIFICATIONS:
-    20150107 - 
+
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -49,14 +47,14 @@ CREATE TABLE #LogInfo
    create_lsn numeric(25,0) );
 
 
---INSERT INTO #Results (DbName, LogFileName, PhysicalName, Growth)
-EXEC sp_foreachdb @suppress_quotename = 1, @command = 'INSERT INTO #Results (DbName, LogFileName, PhysicalName, Growth)
-      SELECT ''?'' , name, physical_name,
+INSERT INTO #Results (DbName, LogFileName, PhysicalName, Growth)
+EXEC sp_ineachdb @suppress_quotename = 1, @command = '
+      SELECT db_name() , name, physical_name,
             CASE WHEN growth  = 0 THEN ''fixed'' ELSE
               CASE WHEN is_percent_growth = 0 THEN CONVERT(varchar(10), (growth/128)) + '' MB''
               WHEN  is_percent_growth = 1 THEN CONVERT(varchar(10), growth) +'' PERCENT''  END
               END AS [growth]
-       FROM [?].sys.database_files 
+       FROM sys.database_files 
        WHERE type_desc = ''LOG'';  ';
 
 
@@ -86,9 +84,6 @@ SELECT *
 FROM #Results 
 WHERE vlf >= @Threshold
 ORDER BY VLF DESC;
-
-
-
 
 
 GO
