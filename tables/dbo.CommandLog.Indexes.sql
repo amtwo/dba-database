@@ -1,10 +1,10 @@
 --The CommandLog table comes from Ola's maintenance package.
 --Table definition comes from there; These are indexes only.
 --Add a couple additional indexes to support querying the log. 
-IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'CommandLog')
+IF EXISTS (SELECT 1 FROM sys.objects WHERE object_id = object_id('dbo.CommandLog')
 BEGIN
     IF NOT EXISTS (SELECT * FROM sys.indexes
-                   WHERE object_id = object_id('CommandLog')
+                   WHERE object_id = object_id('dbo.CommandLog')
                    AND name = 'ix_CommandLog_CommandType_StartTime')
     BEGIN
         CREATE INDEX ix_CommandLog_CommandType_StartTime
@@ -12,7 +12,7 @@ BEGIN
     END;
 
     IF NOT EXISTS (SELECT * FROM sys.indexes
-                   WHERE object_id = object_id('CommandLog')
+                   WHERE object_id = object_id('dbo.CommandLog')
                    AND name = 'ix_CommandLog_StartTime')
     BEGIN
         CREATE INDEX ix_CommandLog_StartTime
@@ -31,7 +31,7 @@ IF EXISTS (SELECT 1
           )
 BEGIN
     IF EXISTS (SELECT 1 FROM sys.partitions
-                WHERE object_id = object_id('CommandLog')
+                WHERE object_id = object_id('dbo.CommandLog')
                 AND data_compression_desc = 'NONE')
     BEGIN
         ALTER INDEX PK_CommandLog ON dbo.CommandLog
@@ -40,7 +40,7 @@ BEGIN
 
     IF EXISTS (SELECT 1 FROM sys.partitions p
                JOIN sys.indexes i ON i.object_id = p.object_id AND i.index_id = p.index_id
-               WHERE p.object_id = object_id('CommandLog')
+               WHERE p.object_id = object_id('dbo.CommandLog')
                AND i.name = 'ix_CommandLog_CommandType_StartTime'
                AND p.data_compression_desc = 'NONE')
     BEGIN
@@ -50,7 +50,7 @@ BEGIN
     
     IF EXISTS (SELECT 1 FROM sys.partitions p
                JOIN sys.indexes i ON i.object_id = p.object_id AND i.index_id = p.index_id
-               WHERE p.object_id = object_id('CommandLog')
+               WHERE p.object_id = object_id('dbo.CommandLog')
                AND i.name = 'ix_CommandLog_StartTime'
                AND p.data_compression_desc = 'NONE')
     BEGIN
