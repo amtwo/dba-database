@@ -1,7 +1,7 @@
 --The CommandLog table comes from Ola's maintenance package.
 --Table definition comes from there; These are indexes only.
 --Add a couple additional indexes to support querying the log. 
-IF EXISTS (SELECT 1 FROM sys.objects WHERE object_id = object_id('dbo.CommandLog')
+IF EXISTS (SELECT 1 FROM sys.objects WHERE object_id = object_id('dbo.CommandLog'))
 BEGIN
     IF NOT EXISTS (SELECT * FROM sys.indexes
                    WHERE object_id = object_id('dbo.CommandLog')
