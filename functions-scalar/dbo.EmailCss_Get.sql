@@ -23,14 +23,13 @@ MODIFICATIONS:
 *************************************************************************************************/
 BEGIN
     DECLARE @Style nvarchar(max),
-            --Use variables for font-family & colors
-            --Makes it easier to update them later
-            @FontFamily nvarchar(200) = '''Segoe UI'',''Arial'',''Helvetica''',
-            @ColorBoldText nvarchar(7) = '#032E57',
-            @ColorAlertText nvarchar(7) = '#DC080A',
-            @ColorBackground nvarchar(7) = '#D0CAC4',
-            @ColorBackground2 nvarchar(7) = '#E4F1FE',
-            @ColorBackgroundAlert nvarchar(7) = '#FEF1E4';
+            --Get color hex values from config table
+            @FontFamily             nvarchar(200) = '''Segoe UI'',''Arial'',''Helvetica''',
+            @ColorBoldText          nvarchar(7) = (SELECT UnicodeValue FROM dbo.Config WHERE ConfigCode = 'EMAILBOLDCOLOR'),
+            @ColorAlertText         nvarchar(7) = (SELECT UnicodeValue FROM dbo.Config WHERE ConfigCode = 'EMAILALERTCOLOR'),
+            @ColorBackground        nvarchar(7) = (SELECT UnicodeValue FROM dbo.Config WHERE ConfigCode = 'EMAILBGCOLOR'),
+            @ColorBackground2       nvarchar(7) = (SELECT UnicodeValue FROM dbo.Config WHERE ConfigCode = 'EMAILBGCOLOR2'),
+            @ColorBackgroundAlert   nvarchar(7) = (SELECT UnicodeValue FROM dbo.Config WHERE ConfigCode = 'EMAILALRTBGCOLOR');
     
     
     SET @Style = N'<style>
