@@ -17,7 +17,7 @@ WITH ServerGroups AS (
             ParentID    = cms1.parent_id,
             GroupPath   = CONVERT(nvarchar(1000),cms1.name)
     FROM msdb.dbo.sysmanagement_shared_server_groups AS cms1
-    WHERE parent_id = 1
+    WHERE cms1.parent_id = 1
     UNION ALL
     SELECT  GroupID     = cms2.server_group_id,
             GroupName   = cms2.name,
