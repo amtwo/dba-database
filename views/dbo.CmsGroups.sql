@@ -1,8 +1,15 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'V' AND object_id = object_id('dbo.CmsGroups'))
+﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'V' AND object_id = object_id('dbo.CmsGroups'))
     EXEC ('CREATE VIEW dbo.CmsGroups AS SELECT ''This is a stub''')
 GO
 ALTER VIEW dbo.CmsGroups
 AS
+/*************************************************************************************************
+AUTHOR: Andy Mallon
+**************************************************************************************************
+    This code is licensed as part of Andy Mallon's DBA Database.
+    https://github.com/amtwo/dba-database/blob/master/LICENSE
+    ©2014-2020 ● Andy Mallon ● am2.co
+*************************************************************************************************/
 WITH ServerGroups AS (
     SELECT  GroupID     = cms1.server_group_id,
             GroupName   = cms1.name,
