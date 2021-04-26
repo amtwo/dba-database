@@ -82,7 +82,7 @@ END
     -- Using sys.sysfiles has the right current file size in all cases.
 
 INSERT #FileSizeInfo (ServerName, DbName, FileSizeMB, SpaceUsedMB, GrowthAmount, LogicalFileName, PhysicalFileName, FileType, FreeSpaceMB, FreeSpacePct) 
-EXEC sp_ineachdb 
+EXEC dbo.sp_ineachdb 
         @suppress_quotename = 1, 
         @state_desc = 'ONLINE', 
         @name_pattern = @DbName, 
@@ -124,7 +124,7 @@ SET @sql = @sql + N' ORDER BY ' + @OrderBy;
 
 PRINT @sql;
 
-EXEC sp_executesql @sql;
+EXEC sys.sp_executesql @sql;
 
 GO
 
