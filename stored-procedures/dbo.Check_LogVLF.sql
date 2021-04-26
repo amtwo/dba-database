@@ -48,7 +48,7 @@ CREATE TABLE #LogInfo
 
 
 INSERT INTO #Results (DbName, LogFileName, PhysicalName, Growth)
-EXEC sp_ineachdb @suppress_quotename = 1, @command = '
+EXEC dbo.sp_ineachdb @suppress_quotename = 1, @command = '
       SELECT db_name() , name, physical_name,
             CASE WHEN growth  = 0 THEN ''fixed'' ELSE
               CASE WHEN is_percent_growth = 0 THEN CONVERT(varchar(10), (growth/128)) + '' MB''
@@ -72,7 +72,7 @@ WHILE @@FETCH_STATUS=0
     ELSE 
         SET @sql='Insert #LogInfo(RecoveryUnitID, fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn) Exec(''DBCC loginfo ('+QUOTENAME(@dbname)+')'')';
     PRINT @sql;
-    EXEC (@sql);
+    EXEC sys.sp_executesql @stmt = @sql;
     UPDATE #Results SET vlf=(SELECT COUNT(*) FROM #LogInfo) WHERE dbname=@DbName;
     FETCH Next FROM db_cur INTO @DbName;
   END;
