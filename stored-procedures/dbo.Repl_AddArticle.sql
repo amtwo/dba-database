@@ -41,7 +41,7 @@ END;
 --Check to see if article exists in Published database
 SET @sql = N'SELECT @OK = 0 
             WHERE NOT EXISTS (SELECT 1 FROM [' + @PubDbName + N'].sys.objects WHERE name = @ArticleName);'
-EXEC sp_executesql @sql, N'@ArticleName sysname, @OK bit OUTPUT', @ArticleName = @ArticleName, @OK = @OK OUTPUT;
+EXEC sys.sp_executesql @sql, N'@ArticleName sysname, @OK bit OUTPUT', @ArticleName = @ArticleName, @OK = @OK OUTPUT;
 IF @OK = 0
 BEGIN
     RAISERROR ('Article does not exist in specified database',16,1);
@@ -53,7 +53,7 @@ END
 SET @sql = N'SELECT @OK = 0 
             WHERE EXISTS (SELECT 1 FROM [' + @PubDbName + N'].sys.objects 
                             WHERE name = @ArticleName AND is_published = 1);'
-EXEC sp_executesql 
+EXEC sys.sp_executesql 
             @stmt = @sql, 
             @params = N'@ArticleName sysname, @OK bit OUTPUT', 
             @ArticleName = @ArticleName, 
@@ -89,7 +89,7 @@ SET @sql = N'EXEC ' + QUOTENAME(@PubDbName) + N'.sys.sp_addarticle
             @del_cmd                        = @DeleteCommand'
 
 IF @Debug = 0
-    EXEC sp_executesql @stmt = @sql,
+    EXEC sys.sp_executesql @stmt = @sql,
                 @params             = N'@PublicationName nvarchar(128),
                                         @ArticleName     nvarchar(128),
                                         @SchemaOption    binary(8),
