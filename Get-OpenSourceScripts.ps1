@@ -3,7 +3,7 @@ $dir = Get-Location
 
 # Ola Hallengren's maintenance scripts
 New-Item -Path "$($dir)\oss\olahallengren" -ItemType Directory -Force |Out-Null
-$url = "https://ola.hallengren.com/scripts"
+$url = "https://raw.githubusercontent.com/olahallengren/sql-server-maintenance-solution/master"
 Invoke-WebRequest -Uri "$($url)/CommandExecute.sql" -OutFile "$($dir)\oss\olahallengren\CommandExecute.sql"
 Invoke-WebRequest -Uri "$($url)/CommandLog.sql" -OutFile "$($dir)\oss\olahallengren\CommandLog.sql"
 Invoke-WebRequest -Uri "$($url)/DatabaseBackup.sql" -OutFile "$($dir)\oss\olahallengren\DatabaseBackup.sql"
@@ -22,7 +22,6 @@ Invoke-WebRequest -Uri "$($url)/sp_BlitzLock.sql" -OutFile "$($dir)\oss\firstres
 #This throws errors when I try to deploy it to <2016 servers. Pulling it for now--will revisit later.
 #Invoke-WebRequest -Uri "$($url)/sp_BlitzQueryStore.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzQueryStore.sql"
 Invoke-WebRequest -Uri "$($url)/sp_BlitzWho.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_BlitzWho.sql"
-Invoke-WebRequest -Uri "$($url)/Deprecated/sp_foreachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_foreachdb.sql"
 Invoke-WebRequest -Uri "$($url)/sp_ineachdb.sql" -OutFile "$($dir)\oss\firstresponderkit\sp_ineachdb.sql"
 
 # sp_WhoIsActive
