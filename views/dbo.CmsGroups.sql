@@ -1,5 +1,5 @@
 ﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'V' AND object_id = object_id('dbo.CmsGroups'))
-    EXEC ('CREATE VIEW dbo.CmsGroups AS SELECT ''This is a stub''')
+    EXEC ('CREATE VIEW dbo.CmsGroups AS SELECT stub = ''This is a stub''')
 GO
 ALTER VIEW dbo.CmsGroups
 AS

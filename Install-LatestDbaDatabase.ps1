@@ -60,6 +60,13 @@ foreach($instance in $InstanceName) {
         Write-Verbose $file.FullName
         Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
     }
+    #Then views
+    Write-Verbose "`n        ***Creating/Updating Views `n"
+    $fileList = Get-ChildItem -Path .\views -Recurse
+    Foreach ($file in $fileList){
+        Write-Verbose $file.FullName
+        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
+    }
     #Then scalar functions
     Write-Verbose "`n        ***Creating/Updating Scalar Functions `n"
     $fileList = Get-ChildItem -Path .\functions-scalar -Recurse
