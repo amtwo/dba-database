@@ -60,6 +60,13 @@ foreach($instance in $InstanceName) {
         Write-Verbose $file.FullName
         Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
     }
+    #Then views
+    Write-Verbose "`n        ***Creating/Updating Views `n"
+    $fileList = Get-ChildItem -Path .\views -Recurse
+    Foreach ($file in $fileList){
+        Write-Verbose $file.FullName
+        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
+    }
     #Then scalar functions
     Write-Verbose "`n        ***Creating/Updating Scalar Functions `n"
     $fileList = Get-ChildItem -Path .\functions-scalar -Recurse
@@ -100,6 +107,13 @@ foreach($instance in $InstanceName) {
         ## WOO HOO! Ola's code is idempotent now!
         Write-Verbose "`n        ***Creating/Updating Ola Hallengren Maintenance Solution `n"
         $fileList = Get-ChildItem -Path .\oss\olahallengren -Recurse -Filter *.sql
+        Foreach ($file in $fileList){
+            Write-Verbose $file.FullName
+            Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
+        }
+        ## That Erik. He's such a Darling.
+        Write-Verbose "`n        ***Creating/Updating Darling's Dandy Data Troubleshooting scripts `n"
+        $fileList = Get-ChildItem -Path .\oss\darlingdata -Recurse -Filter *.sql
         Foreach ($file in $fileList){
             Write-Verbose $file.FullName
             Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName

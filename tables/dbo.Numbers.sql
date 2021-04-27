@@ -1,4 +1,4 @@
-IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE name = 'Numbers')
+IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = object_id('dbo.Numbers'))
 BEGIN
     CREATE TABLE dbo.Numbers (
         Number int identity(1,1),

@@ -234,9 +234,9 @@ BEGIN
         --now get the object name
         SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256);
         SELECT @Sql = 'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + ''.'' + o.name, @IndexName = i.name ' +
-            'FROM [' + @DbName + '].sys.partitions p ' +
-            'JOIN [' + @DbName + '].sys.objects o ON p.OBJECT_ID = o.OBJECT_ID ' +
-            'JOIN [' + @DbName + '].sys.indexes i ON p.OBJECT_ID = i.OBJECT_ID  AND p.index_id = i.index_id ' +
+            'FROM ' + QUOTENAME(@DbName) + '.sys.partitions p ' +
+            'JOIN ' + QUOTENAME(@DbName) + '.sys.objects o ON p.OBJECT_ID = o.OBJECT_ID ' +
+            'JOIN ' + QUOTENAME(@DbName) + '.sys.indexes i ON p.OBJECT_ID = i.OBJECT_ID  AND p.index_id = i.index_id ' +
             'WHERE p.hobt_id = SUBSTRING(@WaitResource,0,CHARINDEX('' '',@WaitResource))'
         EXEC sp_executesql @sql,N'@WaitResource nvarchar(256),@ObjectName nvarchar(256) OUT,@IndexName nvarchar(256) OUT',
                 @WaitResource = @WaitResource, @ObjectName = @ObjectName OUT, @IndexName = @IndexName OUT

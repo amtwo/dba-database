@@ -81,13 +81,13 @@ END
     -- sys.sysfiles will show the *current* file size
     -- Using sys.sysfiles has the right current file size in all cases.
 
-EXEC sp_foreachdb 
+INSERT #FileSizeInfo (ServerName, DbName, FileSizeMB, SpaceUsedMB, GrowthAmount, LogicalFileName, PhysicalFileName, FileType, FreeSpaceMB, FreeSpacePct) 
+EXEC dbo.sp_ineachdb 
         @suppress_quotename = 1, 
         @state_desc = 'ONLINE', 
         @name_pattern = @DbName, 
-        @command = 'USE [?] 
-    INSERT #FileSizeInfo (ServerName, DbName, FileSizeMB, SpaceUsedMB, GrowthAmount, LogicalFileName, PhysicalFileName, FileType, FreeSpaceMB, FreeSpacePct) 
-    SELECT @@servername as ServerName,   ''?'' AS DatabaseName,   
+        @command = '
+    SELECT @@servername as ServerName,   db_name() AS DatabaseName,   
     CAST(f.size/128.0 AS decimal(20,2)) AS FileSize, 
     CASE
         WHEN mf.type_desc = ''FILESTREAM'' THEN CAST(f.size/128.0 AS decimal(20,2))
@@ -104,7 +104,7 @@ EXEC sp_foreachdb
     CAST(100 * (CAST (((f.size/128.0 -CAST(FILEPROPERTY(mf.name,   
         ''SpaceUsed'' ) AS int)/128.0)/(f.size/128.0))   AS decimal(4,2))) AS varchar(8)) + ''%'' AS FreeSpacePct 
     FROM sys.master_files mf 
-    JOIN [?].sys.database_files f ON f.file_id = mf.file_id AND mf.database_id = db_id(''?'')
+    JOIN sys.database_files f ON f.file_id = mf.file_id AND mf.database_id = db_id();
     ' ;
  
 
@@ -124,7 +124,7 @@ SET @sql = @sql + N' ORDER BY ' + @OrderBy;
 
 PRINT @sql;
 
-EXEC sp_executesql @sql;
+EXEC sys.sp_executesql @sql;
 
 GO
 
