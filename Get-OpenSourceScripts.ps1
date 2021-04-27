@@ -26,5 +26,13 @@ Invoke-WebRequest -Uri "$($url)/sp_ineachdb.sql" -OutFile "$($dir)\oss\firstresp
 
 # sp_WhoIsActive
 New-Item -Path "$($dir)\oss\whoisactive" -ItemType Directory -Force |Out-Null
-$url = "https://raw.githubusercontent.com/amachanic/sp_whoisactive/master/who_is_active.sql"
-Invoke-WebRequest -Uri $url -OutFile "$($dir)\oss\whoisactive\who_is_active.sql"
+$url = "https://raw.githubusercontent.com/amachanic/sp_whoisactive/master"
+Invoke-WebRequest -Uri "$($url)/who_is_active.sql" -OutFile "$($dir)\oss\whoisactive\who_is_active.sql"
+
+
+# Darling Data Troubleshooting scripts
+New-Item -Path "$($dir)\oss\darlingdata" -ItemType Directory -Force |Out-Null
+$url = "https://raw.githubusercontent.com/erikdarlingdata/DarlingData/master"
+Invoke-WebRequest -Uri "$($url)/sp_PressureDetector/sp_PressureDetector.sql" -OutFile "$($dir)\oss\darlingdata\sp_PressureDetector.sql"
+Invoke-WebRequest -Uri "$($url)/sp_HumanEvents/sp_HumanEvents.sql" -OutFile "$($dir)\oss\darlingdata\sp_HumanEvents.sql"
+

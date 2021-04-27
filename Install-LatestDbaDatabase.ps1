@@ -104,6 +104,13 @@ foreach($instance in $InstanceName) {
             Write-Verbose $file.FullName
             Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
         }
+        ## That Erik. He's such a Darling.
+        Write-Verbose "`n        ***Creating/Updating Ola Hallengren Maintenance Solution `n"
+        $fileList = Get-ChildItem -Path .\oss\darlingdata -Recurse -Filter *.sql
+        Foreach ($file in $fileList){
+            Write-Verbose $file.FullName
+            Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
+        }
     }
 
 

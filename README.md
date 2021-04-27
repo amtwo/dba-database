@@ -17,3 +17,4 @@ Some of this code (including the installer!) assumes that the First Responder Ki
 * The First Responders Kit is distributed under the [MIT License](https://github.com/BrentOzarULTD/SQL-Server-First-Responder-Kit/blob/master/LICENSE.md).
 * Ola Hallengren's SQL Server Maintenance Solution is distributed under the [MIT License](https://ola.hallengren.com/license.html).
 * sp_WhoIsActive is distributed under the [GNU GPL v3](https://github.com/amachanic/sp_whoisactive/blob/master/LICENSE).
+* The Darling Data SQL Server Troubleshooting Scripts are distributed under the [MIT License](https://github.com/erikdarlingdata/DarlingData/blob/master/LICENSE.md).
