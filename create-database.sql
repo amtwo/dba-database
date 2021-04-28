@@ -1,17 +1,17 @@
 --Create DB
-IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = '$(DbName)')
+IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'$(DbName)')
 BEGIN
     CREATE DATABASE [$(DbName)];
     ALTER DATABASE  [$(DbName)] ADD FILEGROUP [DATA];
     --Need to use dynamic SQL to ensure we put this data file in the right spot dynamically
     DECLARE @sql nvarchar(max);
-    SELECT @sql = N'ALTER DATABASE  [$(DbName)] ADD FILE (NAME=''$(DbName)_data'', FILENAME=''' 
-                    + LEFT(physical_name,LEN(physical_name)-CHARINDEX('\',REVERSE(physical_name))+1) 
+    SELECT @sql = N'ALTER DATABASE  [$(DbName)] ADD FILE (NAME=N''$(DbName)_data'', FILENAME=N''' 
+                    + LEFT(physical_name,LEN(physical_name)-CHARINDEX(N'\',REVERSE(physical_name))+1) 
                     + N'$(DbName)_data.ndf' + N''') TO FILEGROUP [DATA];'
     FROM sys.master_files 
-    WHERE database_id = db_id('$(DbName)')
+    WHERE database_id = db_id(N'$(DbName)')
     AND file_id = 1;
-    EXEC sp_executesql @statement = @sql;
+    EXEC sys.sp_executesql @statement = @sql;
     --And now finish up creating it
     ALTER DATABASE  [$(DbName)] MODIFY FILEGROUP [DATA] DEFAULT;
     ALTER DATABASE  [$(DbName)] SET READ_COMMITTED_SNAPSHOT ON;
