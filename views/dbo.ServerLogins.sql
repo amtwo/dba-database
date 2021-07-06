@@ -55,6 +55,11 @@ AS
                                                      N';'
                                                  )
                                       END,
+            EnableSql               = CONCAT(N'ALTER LOGIN ',
+                                            QUOTENAME(p.name), ' ',
+                                            IIF(p.is_disabled = 1,' DISABLE',' ENABLE'),
+                                            N';'
+                                    ),
             DateCreated             = p.create_date,
             DateModified            = p.modify_date
             FROM sys.server_principals AS p
