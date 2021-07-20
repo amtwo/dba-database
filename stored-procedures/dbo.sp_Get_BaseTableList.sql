@@ -8,9 +8,9 @@ BEGIN
 	--do this in dynamic SQL so CREATE PROCEDURE can be nested in this IF block
 	EXEC ('CREATE PROCEDURE dbo.sp_get_basetable_list AS SELECT 1')
 	--mark it as a system object
-	EXEC sp_MS_marksystemobject sp_get_basetable_list
+	--EXEC sp_MS_marksystemobject sp_get_basetable_list
 	--grant permission to the whole world
-	GRANT EXECUTE ON sp_get_basetable_list to PUBLIC
+	--GRANT EXECUTE ON sp_get_basetable_list to PUBLIC
 END
 GO
 
