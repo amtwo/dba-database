@@ -4,7 +4,10 @@ GO
 
 
 ALTER PROCEDURE dbo.Check_AgLatency 
-	@Threshold int = 0
+	@Threshold int = 0,
+    @DbName nvarchar(128) = N'%',
+    @AgName nvarchar(128) = N'%',
+    @UnhealthyOnly bit = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -14,6 +17,9 @@ CREATED: 20140409
 
 PARAMETERS
 * @Threshold - Default 5000 - Size in KB of the unsent log 
+* @DbName        - Default % (anything) - Filter by DbName, Can be wildcarded
+* @AgName        - Default % (anything) - Filter by AgName, Can be wildcarded
+* @UnhealthyOnly - Default 0 (false) - Only select databases that have sync status of NOT HEALTHY
 EXAMPLES:
 *
 **************************************************************************************************
@@ -151,11 +157,23 @@ JOIN #Results r2 ON r2.AgName = r.AgName AND r2.DbName = r.DbName AND r2.LastHar
 
 
 --Output results
+-- Do filtering on the results here, rather than up above. 
+-- There's not much data here, so no perf advantage to doing it sooner.
     IF NOT EXISTS (SELECT 1 FROM #Results)
     	SELECT 'No AGs Exist' AS AgStatus;
     ELSE
     	SELECT * 
-        FROM #Results 
-        WHERE UnsentLogKb >= @Threshold
+        FROM #Results AS r
+        WHERE r.UnsentLogKb >= @Threshold
+        AND r.DbName LIKE @DbName
+        AND r.AgName LIKE @AgName
+        AND r.DbName = CASE
+                        WHEN @UnhealthyOnly = 0 
+                            THEN r.DbName
+                        WHEN EXISTS (SELECT 1 FROM #Results r2
+                                    WHERE r2.AgHealth <> 'HEALTHY'
+                                    AND r2.DbName = r.DbName)
+                            THEN r.DbName
+                      END
         ORDER BY SortOrder, UnsentLogKb DESC, ServerName, DbName;
 GO
