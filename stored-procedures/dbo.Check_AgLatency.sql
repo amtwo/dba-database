@@ -101,10 +101,10 @@ INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, AgRole, SynchState, 
            ds.last_redone_time AS LastRedoneTime,
            CASE WHEN redo_rate = 0 THEN 0 ELSE ds.redo_queue_size/ds.redo_rate END AS RedoEstCompletion,
            ds.last_commit_time AS LastCommitTime
-    FROM sys.dm_hadr_database_replica_states ds
-    JOIN sys.availability_groups ag ON ag.group_id = ds.group_id
-    JOIN sys.dm_hadr_availability_replica_states rs ON rs.replica_id = ds.replica_id
-    JOIN sys.availability_replicas ar ON ar.group_id = ag.group_id AND ar.replica_id = rs.replica_id;
+    FROM sys.availability_groups AS ag
+    JOIN sys.availability_replicas AS ar ON ar.group_id = ag.group_id 
+    JOIN sys.dm_hadr_database_replica_states AS ds ON ds.group_id = ar.group_id AND ds.replica_id = ar.replica_id
+    JOIN sys.dm_hadr_availability_replica_states AS rs ON rs.replica_id = ds.replica_id;
 	
 
 --Lets make this easy, and create a temp table with the current status
