@@ -84,11 +84,12 @@ CREATE TABLE #Results (
     );
 
 
--- Grab the current status from DMVs for mirroring & AGs
+-- Grab the current status from DMVs for AGs
+-- In a distributed AG, "ServerName" is the AG name we're sending to.
 INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, AgRole, SynchState, AgHealth, SuspendReason, 
                       SynchHardenedLSN, LastHardenedTime, LastRedoneTime, RedoEstSecCompletion,LastCommitTime)
     SELECT GETDATE() AS RunDate, 
-           rcs.replica_server_name AS ServerName, 
+           ar.replica_server_name AS ServerName, 
            ag.Name                        COLLATE SQL_Latin1_General_CP1_CI_AS AS AgName,
            db_name(ds.database_id) AS DbName, 
            rs.role_desc                   COLLATE SQL_Latin1_General_CP1_CI_AS AS AgRole,
@@ -101,11 +102,10 @@ INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, AgRole, SynchState, 
            CASE WHEN redo_rate = 0 THEN 0 ELSE ds.redo_queue_size/ds.redo_rate END AS RedoEstCompletion,
            ds.last_commit_time AS LastCommitTime
     FROM sys.dm_hadr_database_replica_states ds
-    JOIN sys.availability_groups_cluster ag ON ag.group_id = ds.group_id
-    JOIN sys.dm_hadr_availability_replica_cluster_states rcs ON rcs.replica_id = ds.replica_id
-    JOIN sys.dm_hadr_availability_replica_states rs ON rs.replica_id = ds.replica_id;
+    JOIN sys.availability_groups ag ON ag.group_id = ds.group_id
+    JOIN sys.dm_hadr_availability_replica_states rs ON rs.replica_id = ds.replica_id
+    JOIN sys.availability_replicas ar ON ar.group_id = ag.group_id AND ar.replica_id = rs.replica_id;
 	
-
 
 --Lets make this easy, and create a temp table with the current status
 -- UNION perfmon counters with dbm_monitor_data. They should be the same, but we don't trust them, so we check both.
