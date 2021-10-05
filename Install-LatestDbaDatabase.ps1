@@ -44,6 +44,10 @@ param (
         [boolean]$SkipOSS = $false
     )
 
+#Get Time Zone info from the OS. We'll use this to populate a table later
+$TimeZoneInfo = Get-TimeZone -ListAvailable | 
+    Add-Member -MemberType AliasProperty -Name TimeZoneId -Value Id -PassThru | Select-Object TimeZoneId, DisplayName, StandardName, DaylightName, SupportsDaylightSavingTime
+
 # Process servers in a loop. I could do this parallel, but doing it this way is fast enough for me.
 foreach($instance in $InstanceName) {
     Write-Verbose "**************************************************************"
@@ -51,7 +55,12 @@ foreach($instance in $InstanceName) {
     Write-Verbose "**************************************************************"
     #Create the database - SQL Script contains logic to be conditional & not clobber existing database
     Write-Verbose "`n        ***Creating Database if necessary `n"
-    Invoke-Sqlcmd -ServerInstance $instance -Database master -InputFile .\create-database.sql -Variable "DbName=$($DatabaseName)"
+    try{
+        Invoke-Sqlcmd -ServerInstance $instance -Database master -InputFile .\create-database.sql -Variable "DbName=$($DatabaseName)"
+    }
+    catch{
+        Write-Error -Message "Failed creating DBA Database" -ErrorAction Stop
+    }
 
     #Create tables first
     Write-Verbose "`n        ***Creating/Updating Tables `n"
@@ -60,6 +69,13 @@ foreach($instance in $InstanceName) {
         Write-Verbose $file.FullName
         Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
     }
+    # Populate the TimeZones table with the object we populated earlier, but only if the table is empty
+    if((Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -Query 'SELECT RowCnt = COUNT(*) FROM dbo.TimeZones').RowCnt -eq 0){
+        Write-Verbose "Populating dbo.TimeZones"
+        Write-SqlTableData  -ServerInstance $instance -Database $DatabaseName -SchemaName "dbo" -Table "TimeZones" -InputData $TimeZoneInfo
+    }
+    
+
     #Then views
     Write-Verbose "`n        ***Creating/Updating Views `n"
     $fileList = Get-ChildItem -Path .\views -Recurse
