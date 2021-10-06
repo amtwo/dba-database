@@ -110,11 +110,11 @@ INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, AgRole, SynchState, 
 --Lets make this easy, and create a temp table with the current status
 -- UNION perfmon counters with dbm_monitor_data. They should be the same, but we don't trust them, so we check both.
 INSERT INTO #SendStatus (ServerName, DbName, UnsentLogKb)
-SELECT rcs.replica_server_name AS ServerName,
+SELECT ar.replica_server_name AS ServerName,
         db_name( drs.database_id) AS DbName, 
         COALESCE(drs.log_send_queue_size,99999) AS UnsentLogKb
 FROM sys.dm_hadr_database_replica_states drs
-JOIN sys.dm_hadr_availability_replica_cluster_states rcs ON rcs.replica_id = drs.replica_id
+JOIN sys.availability_replicas ar ON ar.replica_id = drs.replica_id
 WHERE drs.last_sent_time IS NOT NULL
 UNION
 SELECT @@SERVERNAME,
@@ -128,17 +128,17 @@ INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHea
                       LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, SortOrder)
 SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
        COALESCE(ag.AgName,'') AS AgName,
-       RTRIM(sync.DbName) AS DbName,
+       COALESCE(sync.DbName, ag.DbName) AS DbName,
        MAX(sync.UnsentLogKb) AS UnsentLogKb,
        COALESCE(ag.SynchState,'') AS SynchState,
        COALESCE(ag.AgHealth,'') AS AgHealth,
        COALESCE(ag.SuspendReason,'') AS SuspendReason,
-       MAX(LastHardenedTime),
-       MAX(LastRedoneTime),
-       MAX(RedoEstSecCompletion),
-       MAX(LastCommitTime),
+       MAX(ag.LastHardenedTime),
+       MAX(ag.LastRedoneTime),
+       MAX(ag.RedoEstSecCompletion),
+       MAX(ag.LastCommitTime),
        CASE
-            WHEN RTRIM(sync.DbName) = '_Total' THEN 0
+            WHEN COALESCE(sync.DbName, ag.DbName) = '_Total' THEN 0
             WHEN MAX(sync.UnsentLogKb) > '1000' THEN 2
             WHEN COALESCE(ag.AgHealth,'') <> 'HEALTHY' THEN 3
             WHEN COALESCE(ag.SynchState,'') NOT IN ('SYNCHRONIZING','SYNCHRONIZED') THEN 4
@@ -146,7 +146,7 @@ SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
        END AS SortOrder
 FROM #SendStatus AS sync
 LEFT JOIN #AgStatus AS ag ON sync.ServerName = ag.ServerName AND sync.DbName = ag.DbName 
-GROUP BY COALESCE(ag.ServerName,@@SERVERNAME),  COALESCE(ag.AgName,''), RTRIM(sync.DbName),COALESCE(ag.SynchState,''), COALESCE(ag.AgHealth,''), 
+GROUP BY COALESCE(ag.ServerName,@@SERVERNAME),  COALESCE(ag.AgName,''), COALESCE(sync.DbName, ag.DbName),COALESCE(ag.SynchState,''), COALESCE(ag.AgHealth,''), 
           COALESCE(ag.SuspendReason,'') ;
 
 UPDATE r
