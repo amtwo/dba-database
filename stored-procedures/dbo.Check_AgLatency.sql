@@ -126,7 +126,7 @@ AND counter_name  = 'Log Send Queue';
 
 INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason, 
                       LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, SortOrder)
-SELECT COALESCE(ag.ServerName,'') AS ServerName,
+SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
        COALESCE(ag.AgName,'') AS AgName,
        RTRIM(sync.DbName) AS DbName,
        MAX(sync.UnsentLogKb) AS UnsentLogKb,
@@ -146,7 +146,7 @@ SELECT COALESCE(ag.ServerName,'') AS ServerName,
        END AS SortOrder
 FROM #SendStatus AS sync
 LEFT JOIN #AgStatus AS ag ON sync.ServerName = ag.ServerName AND sync.DbName = ag.DbName 
-GROUP BY COALESCE(ag.ServerName,''),  COALESCE(ag.AgName,''), RTRIM(sync.DbName),COALESCE(ag.SynchState,''), COALESCE(ag.AgHealth,''), 
+GROUP BY COALESCE(ag.ServerName,@@SERVERNAME),  COALESCE(ag.AgName,''), RTRIM(sync.DbName),COALESCE(ag.SynchState,''), COALESCE(ag.AgHealth,''), 
           COALESCE(ag.SuspendReason,'') ;
 
 UPDATE r
