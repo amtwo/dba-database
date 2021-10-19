@@ -2,15 +2,14 @@ IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object
     EXEC ('CREATE PROCEDURE dbo.Cleanup_Msdb AS SELECT ''This is a stub''')
 GO
 
-
 ALTER PROCEDURE dbo.FindStringInModules
    @search_string               nvarchar(4000),
-   @case_sensitive              bit = 0,
    @database_list               nvarchar(max) = NULL,
+   @case_sensitive              bit = 0,
    @search_jobs                 bit = 0,
    @search_job_and_step_names   bit = 0,
-   @search_object_names         bit = 0,
    @search_schema_names         bit = 0,
+   @search_object_names         bit = 0,
    @search_column_names         bit = 0,
    @search_parameter_names      bit = 0,
    @search_system_objects       bit = 0,
@@ -19,12 +18,39 @@ ALTER PROCEDURE dbo.FindStringInModules
    @debug                       bit = 0
 AS
 /*************************************************************************************************
-AUTHOR: <name>
-CREATED: YYYYMMDD
-    WTF does this do? TLDR
+AUTHOR: Aaron Bertrand
+CREATED: 20211018
+    Searches procedures, triggers, views, etc. for a specified search string.
+    This is NOT for searching within data stored inside string columns.
+    Supports Unicode / supplementary characters in both search string and object/database names.
+    Can optionally search for the search string contained in:
+      - job step command text (even if it's not T-SQL)
+      - job and step names
+      - object, schema, column, and parameter names
+      - system objects (including those within system databases)
 
 PARAMETERS
-* add any necessary parameter documentation here. Assume your param names are confusing to others
+   @search_string               The string you want to search for. You don't need to surround it with %.
+   @database_list               Comma-separated list of databases, e.g. N'AdventureWorks,msdb'.
+                                - currently this overrides @search_system_databases.
+   @case_sensitive              Set this to 1 if you want Andy to only match Andy and not ANDy or andY.
+   @search_jobs                 Set to 1 if you want to search the command text of all job steps.
+   @search_job_and_step_names   Set to 1 if you want to search within job and step names.
+                                Will only work if @search_jobs is also set to 1.
+   @search_schema_names         Set to 1 if you want to search within schema names.
+   @search_object_names         Set to 1 if you want to search within object names.
+   @search_column_names         Set to 1 if you want to search within column names.
+   @search_parameter_names      Set to 1 if you want to search within parameter names.,
+   @search_system_objects       Set to 1 if you want to search within system objects.
+                                - this will return multiple hits for system objects that are in every database.
+   @search_system_databases     Set to 1 if you want to search master, model, msdb, and tempdb.
+                                - this won't search the resource database (or objects that require DAC).
+   @search_everything           Overrides all of the above bit parameters to 1.
+   @debug                       Set to 1 if you just want print output of the commands.
+
+KNOWN ISSUES
+    If your database name contains non-XML-safe characters (e.g. < or &), convert to XML will fail.
+    
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
