@@ -3,7 +3,7 @@ IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = objec
 GO
 
 
-ALTER FUNCTION dbo.fn_split (@Text varchar(8000), @Token varchar(20) = ',')
+ALTER FUNCTION dbo.fn_split (@Text nvarchar(8000), @Token nvarchar(20) = N',')
 RETURNS TABLE
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -21,7 +21,7 @@ EXAMPLES:
 * SELECT * FROM dbo.fn_split('A|^B|^C','|^')
 **************************************************************************************************
 MODIFICATIONS:
-    YYYYMMDD -
+    20211019 - Updated to support Unicode lists (such as a list of database names)
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -32,7 +32,7 @@ RETURN
 SELECT ID, Value
 FROM (
     SELECT ID = m.n.value('for $i in . return count(../*[. << $i]) + 1', 'int')
-        , Value = LTRIM(RTRIM(m.n.value('.[1]','varchar(8000)')))
+        , Value = LTRIM(RTRIM(m.n.value('.[1]','nvarchar(4000)')))
     FROM (
         SELECT CAST('<XMLRoot><RowData>' + REPLACE(@Text,@Token,'</RowData><RowData>') + '</RowData></XMLRoot>' AS XML) AS x
         )t
