@@ -3,7 +3,7 @@ IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = objec
 GO
 
 
-ALTER FUNCTION dbo.fn_split (@Text nvarchar(8000), @Token nvarchar(20) = N',')
+ALTER FUNCTION dbo.fn_split (@Text nvarchar(4000), @Token nvarchar(20) = N',')
 RETURNS TABLE
 /*************************************************************************************************
 AUTHOR: Andy Mallon
