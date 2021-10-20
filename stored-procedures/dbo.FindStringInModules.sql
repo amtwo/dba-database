@@ -222,7 +222,7 @@ SELECT [database]     = DB_NAME(),
                 s.step_name,
                 j.date_created,
                 j.date_modified,
-                [command_with_use] = CONVERT(xml, N''<?query -- '' + QUOTENAME(DB_NAME())
+                [command_with_use] = CONVERT(xml, N''<?query -- '' + QUOTENAME(s.database_name)
                                      + CHAR(13) + CHAR(10) + s.[command]
                                      + CHAR(13) + CHAR(10) + ''--'' + CHAR(63) + ''>'')
             FROM msdb.dbo.sysjobs AS j
