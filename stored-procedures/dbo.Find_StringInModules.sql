@@ -1,8 +1,8 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Cleanup_Msdb'))
-    EXEC ('CREATE PROCEDURE dbo.Cleanup_Msdb AS SELECT ''This is a stub''')
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Find_StringInModules'))
+    EXEC ('CREATE PROCEDURE dbo.Find_StringInModules AS SELECT ''This is a stub''')
 GO
 
-ALTER PROCEDURE dbo.FindStringInModules
+ALTER PROCEDURE dbo.Find_StringInModules
    @search_string               nvarchar(4000),
    @database_list               nvarchar(max) = NULL,
    @case_sensitive              bit = 0,
