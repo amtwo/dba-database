@@ -49,7 +49,8 @@ PARAMETERS
    @debug                       Set to 1 if you just want print output of the commands.
 
 KNOWN ISSUES
-    If your database name contains non-XML-safe characters (e.g. < or &), convert to XML will fail.
+    The split function uses XML, so if @database_list contains a database name with non-XML-safe 
+    characters (e.g. < or &), the convert to XML will fail.
     
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
@@ -111,13 +112,13 @@ SELECT [database]     = DB_NAME(),
        o.modify_date,
        [column_name]  = $col$,
        [param_name]   = $param$,
-       definition     = CONVERT(xml, ''<?query --''
-           + CHAR(13) + CHAR(10) + ''USE '' + QUOTENAME(DB_NAME()) + '';''
-           + CHAR(13) + CHAR(10) + ''GO''
-           + CHAR(13) + CHAR(10) + OBJECT_DEFINITION(o.object_id) + '' --?>'')
+       definition     = CONVERT(xml, ''<?query -- '' + QUOTENAME(DB_NAME())
+                        + CHAR(13) + CHAR(10) + OBJECT_DEFINITION(o.object_id) 
+                        + CHAR(13) + CHAR(10) + ''--'' + CHAR(63) + ''>'')
   FROM sys.$all$objects AS o
   INNER JOIN sys.schemas AS s 
     ON o.[schema_id] = s.[schema_id]';
+    
 
   SET @sql = @sql + REPLACE(REPLACE(@template, N'$col$', N'NULL'), N'$param$', N'NULL')
       + N'
@@ -196,6 +197,21 @@ SELECT [database]     = DB_NAME(),
     FETCH NEXT FROM @c INTO @db;
   END
 
+  IF @debug = 0
+  BEGIN
+        SELECT [database], 
+             [schema], 
+             [object], 
+             [type], 
+             create_date, 
+             modify_date, 
+             column_name, 
+             param_name, 
+             definition
+      FROM #o
+      ORDER BY [database], [schema], [object], [column_name], [param_name];
+  END
+
   /* jobs */
 
   IF @search_jobs = 1
@@ -206,11 +222,9 @@ SELECT [database]     = DB_NAME(),
                 s.step_name,
                 j.date_created,
                 j.date_modified,
-                [command_with_use] = CONVERT(xml, N''<?query --''
-           + CHAR(13) + CHAR(10) + N''USE '' 
-           + QUOTENAME(s.database_name) + N'';''
-           + CHAR(13) + CHAR(10) + N''GO''
-           + CHAR(13) + CHAR(10) + s.[command] + N'' --?>'')
+                [command_with_use] = CONVERT(xml, N''<?query -- '' + QUOTENAME(DB_NAME())
+                                     + CHAR(13) + CHAR(10) + s.[command]
+                                     + CHAR(13) + CHAR(10) + ''--'' + CHAR(63) + ''>'')
             FROM msdb.dbo.sysjobs AS j
             INNER JOIN msdb.dbo.sysjobsteps AS s
             ON j.job_id = s.job_id
@@ -233,17 +247,6 @@ SELECT [database]     = DB_NAME(),
     END
     ELSE
     BEGIN
-      SELECT [database], 
-             [schema], 
-             [object], 
-             [type], 
-             create_date, 
-             modify_date, 
-             column_name, 
-             param_name, 
-             definition
-      FROM #o;
-
       EXEC sys.sp_executesql @sql, N'@s nvarchar(4000)', @s = @search_string;
     END
   END
