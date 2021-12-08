@@ -45,8 +45,10 @@ EXEC msdb.dbo.sysmail_delete_mailitems_sp @sent_before = @RetainDate;
     
 
 --And do index maintenance
-DECLARE @Sql nvarchar(max) = ''
-SELECT @Sql = @Sql + 'ALTER INDEX [' + i.name + '] ON [msdb].[' + s.name + '].[' + t.name + '] REORGANIZE;' + CHAR(10)
+-- if you aren't doing index maintenance on msdb, we'll force it here
+-- sometimes this prevents significant space bloat, esp on older versions
+DECLARE @Sql nvarchar(max) = N''
+SELECT @Sql = @Sql + N'ALTER INDEX ' + QUOTENAME(i.name) + N' ON [msdb].' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N' REORGANIZE;' + CHAR(10)
 FROM msdb.sys.tables t
 JOIN msdb.sys.indexes i ON t.object_id = i.object_id
 JOIN msdb.sys.partitions p ON i.object_id = p.OBJECT_ID AND i.index_id = p.index_id
