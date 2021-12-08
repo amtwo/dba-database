@@ -56,7 +56,7 @@ JOIN msdb.sys.schemas s ON t.schema_id = s.schema_id
 WHERE p.rows > 1000;
 
 
-EXEC sp_executesql @Sql
+EXEC sys.sp_executesql @Sql
 GO
 
 
