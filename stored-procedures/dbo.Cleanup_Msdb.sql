@@ -29,7 +29,7 @@ SET NOCOUNT ON;
 
 DECLARE @RetainDate datetime2;
 
-SELECT @RetainDate = DATEADD(DD,-1*@RetainDays,SYSDATETIME());
+SELECT @RetainDate = DATEADD(DAY,-1*@RetainDays,SYSDATETIME());
 
 -- Delete backup history
 EXEC dbo.Cleanup_BackupHistory @oldest_date = @RetainDate;
