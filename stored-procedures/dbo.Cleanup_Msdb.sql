@@ -32,7 +32,7 @@ DECLARE @RetainDate datetime2;
 SELECT @RetainDate = DATEADD(DD,-1*@RetainDays,SYSDATETIME());
 
 -- Delete backup history
-EXEC msdb.dbo.sp_delete_backuphistory @RetainDate;
+EXEC dbo.Cleanup_BackupHistory @oldest_date = @RetainDate;
 
 -- Delete the SQL Server agent job history log
 EXEC msdb.dbo.sp_purge_jobhistory @oldest_date = @RetainDate;
