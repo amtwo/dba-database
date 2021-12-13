@@ -15,17 +15,53 @@ AS
 
 
 SET NOCOUNT ON;
+--
+--
+-- Validate inputs! 
+--
+--
+IF (@Action NOT IN ('DISABLE','ENABLE') )
+BEGIN
+    -- Did not specify a valid Action
+    RAISERROR ('@Action must be specified as either "ENABLE" or "DISABLE".',16,1)
+    RETURN;
+END;
 
 IF (@Action = 'DISABLE'
     AND COALESCE(@RoutingListCSV,@RoutingListPattern) IS NOT NULL)
 BEGIN
-    RAISERROR ('For "DISABLE" @Action, both @RoutingListCSV and @RoutingListPattern must be NULL',16,1)
+    -- Disable will reset routing list to self only. Not allowed to specify a routing list on Disable action
+    RAISERROR ('For "DISABLE" @Action, both @RoutingListCSV and @RoutingListPattern must be NULL.',16,1)
     RETURN;
 END;
 
+IF (@Action = 'ENABLE'
+    AND @RoutingListCSV IS NOT NULL 
+    AND @RoutingListPattern IS NOT NULL)
+BEGIN
+    -- Enable routing with BOTH a CSV & Pattern for ROR list is not allowed
+    RAISERROR ('For "ENABLE" @Action, specify a value for either @RoutingListCSV or @RoutingListPattern. The unused parameter must be NULL. Providing both is not allowed.',16,1)
+    RETURN;
+END;
+
+IF (@Action = 'ENABLE'
+    AND @RoutingListCSV IS NULL 
+    AND @RoutingListPattern IS NULL)
+BEGIN
+    -- Enable routing with NEITHER a CSV & Pattern for ROR list is not allowed
+    RAISERROR ('For "ENABLE" @Action, specify a value for either @RoutingListCSV or @RoutingListPattern. The unused parameter must be NULL. Providing neither is not allowed.',16,1)
+    RETURN;
+END;
+
+
+--
+--
+-- OK, now do stuff
+--
+--
 WITH RoutingLists AS (
     SELECT ar.group_id ,
-            STRING_AGG('N''' + ar.replica_server_name + '''',',') WITHIN GROUP (ORDER BY IIF(ar.replica_server_name = @@SERVERNAME, 9, 0), ar.replica_server_name)
+           RoutingList = STRING_AGG('N''' + ar.replica_server_name + '''',',') WITHIN GROUP (ORDER BY IIF(ar.replica_server_name = @@SERVERNAME, 9, 0), ar.replica_server_name)
     FROM sys.availability_replicas AS ar
     WHERE ar.replica_server_name LIKE COALESCE(@RoutingListPattern, ar.replica_server_name)
     AND @RoutingListCSV IS NULL
@@ -43,7 +79,7 @@ WITH RoutingLists AS (
 SELECT N'USE [master]
 
 ALTER AVAILABILITY GROUP ' + QUOTENAME(ag.name) + '
-    MODIFY REPLICA  ON N''' + ar.name + ''' 
+    MODIFY REPLICA  ON N''' + ar.replica_server_name + ''' 
     WITH (PRIMARY_ROLE(READ_ONLY_ROUTING_LIST = (' + 
         CASE 
             WHEN @Action = 'DISABLE' THEN @@SERVERNAME
