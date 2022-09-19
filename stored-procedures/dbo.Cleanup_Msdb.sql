@@ -42,7 +42,11 @@ EXEC msdb.dbo.sysmail_delete_log_sp @logged_before = @RetainDate;
 
 -- Delete old mail items
 EXEC msdb.dbo.sysmail_delete_mailitems_sp @sent_before = @RetainDate;
-    
+
+-- Run PBM cleanup
+-- Retention based on SELECT current_value FROM msdb.dbo.syspolicy_configuration WHERE name = N'HistoryRetentionInDays'; 
+-- Set retention with sp_syspolicy_set_config_history_retention [ @value = ] value
+EXEC msdb.dbo.sp_syspolicy_purge_history;
 
 --And do index maintenance
 -- if you aren't doing index maintenance on msdb, we'll force it here
