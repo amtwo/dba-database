@@ -6,6 +6,52 @@ CREATE OR ALTER PROCEDURE dbo.Set_AGReadOnlyRouting
     @RoutingListCSV       nvarchar(max)   = NULL,
     @Debug                bit             = 0
 AS
+/*************************************************************************************************
+AUTHOR: Andy Mallon
+CREATED: 20220920
+       This procedure can be used to enable or disable Read-Only Routing on an Availability Group.
+       Parameters allow you to optinally control a subset of replicas to modify the ROR list on.
+       The read-only routing list can either be specified explicitly, or build dynamically based
+       on a naming convention.
+       
+       Note that the @RoutingListPattern and @RoutingListCSV parameters are mutually exclusive, 
+       and you must supply exactly one of the two parameters. Supplying both or neither will
+       cause the procedure to fail and return an error.
+
+PARAMETERS
+* @Action               - Either "ENABLE" or "DISABLE". All other values will cause the stored 
+                          procedure to fail & return an error
+* @AGNamePattern        - Defaults to '%', which will modify all AGs.
+                          The Name or wildcarded partial name of the AG(s) you want to modify 
+                          the ROR on. This is compared to AG names using a LIKE. You must supply
+                          wildcards as needed. 
+                          Note that _ is treated as a single-character wildcard.
+* @ModifyReplicaPattern - Defaults to '%', which will modify all Replicas.
+                          The Name or wildcarded partial name of the replicas AG(s) you want to 
+                          modify the ROR for when they are the Primary replica. This is compared 
+                          to replica names using a LIKE. You must supply wildcards as needed. 
+                          Note that _ is treated as a single-character wildcard.
+* @RoutingListPattern   - Defaults to NULL.
+                          Wildcarded partial name of the replicas AG(s) you want to use to build
+                          the ROR list. This is compared to replica names using a LIKE.  
+                          You must supply wildcards as needed. 
+                          Note that _ is treated as a single-character wildcard.
+                          When building the ROR list with this method, matching replicas are
+                          included in alphabetical order. When a replica is in it's own ROR list,
+                          it will always be included last, so that read-only traffic prefers 
+                          secondary nodes, and not Primary.
+* @RoutingListCSV       - If you want to explicitly supply the ROR list, include a comma-separated
+                          list of servers here. Order will be preserved and the ROR list will be
+                          included in the specified order for all modified replicas. 
+* @Debug                - Defaults to False. Supplying a 1 for this bit will not perform any 
+                          changes to AG configuration, but will instead simply PRINT the
+                          constructed SQL. 
+                          
+**************************************************************************************************
+    This code is licensed as part of Andy Mallon's DBA Database.
+    https://github.com/amtwo/dba-database/blob/master/LICENSE
+    ©2014-2023 ● Andy Mallon ● am2.co
+*************************************************************************************************/
 
 SET NOCOUNT ON;
 
@@ -88,6 +134,7 @@ BEGIN
             N'  WITH (PRIMARY_ROLE(READ_ONLY_ROUTING_LIST = ( NONE ))); ' + CHAR(10)
     FROM @AgList AS ag
     JOIN sys.dm_hadr_availability_replica_cluster_states AS rcs ON rcs.group_id = ag.GroupId
+    WHERE rcs.replica_server_name LIKE @ModifyReplicaPattern;
 END;
 
 
