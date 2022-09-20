@@ -46,6 +46,33 @@ PARAMETERS
 * @Debug                - Defaults to False. Supplying a 1 for this bit will not perform any 
                           changes to AG configuration, but will instead simply PRINT the
                           constructed SQL. 
+
+EXAMPLES:
+--For all AGs,
+--Enable ROR for Replicas with names starting with BOS
+--In the ROR routing list, use only replicas with names starting with BOS
+EXEC DBA.dbo.Set_AGReadOnlyRouting
+        @Action               = 'ENABLE',
+        @ModifyReplicaPattern = 'BOS%',
+        @RoutingListPattern   = 'BOS%';
+
+--For AGs with names starting with "AG-AM2",
+--Disable ROR for Replicas with names starting with DR
+--But don't run the DISABLE, just print it instead.
+EXEC DBA.dbo.Set_AGReadOnlyRouting
+        @Action               = 'DISABLE',
+        @AgNamePattern        = 'AG-AM2%',
+        @ModifyReplicaPattern = 'DR%',
+        @Debug = 1;
+
+--For all AGs,
+--Enable ROR for Replicas with names starting with BOS
+--Use the specified servers as the ROR list for every AG replica
+EXEC DBA.dbo.Set_AGReadOnlyRouting
+        @Action               = 'ENABLE',
+        @ModifyReplicaPattern = '%',
+        @RoutingListCSV       = 'BOS-SQL98, BOS-SQL99',
+        @Debug = 1;
                           
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
