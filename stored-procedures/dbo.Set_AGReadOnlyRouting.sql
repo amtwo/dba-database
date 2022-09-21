@@ -158,7 +158,7 @@ BEGIN
     SELECT  @sql +=
             N'ALTER AVAILABILITY GROUP ' + QUOTENAME(ag.AgName) + CHAR(10) + 
             N'  MODIFY REPLICA ON ' + QUOTENAME(rcs.replica_server_name, NCHAR(39) ) + CHAR(10) +
-            N'  WITH (PRIMARY_ROLE(READ_ONLY_ROUTING_LIST = ( NONE ))); ' + CHAR(10)
+            N'  WITH (PRIMARY_ROLE(READ_ONLY_ROUTING_LIST =  NONE )); ' + CHAR(10)
     FROM @AgList AS ag
     JOIN sys.dm_hadr_availability_replica_cluster_states AS rcs ON rcs.group_id = ag.GroupId
     WHERE rcs.replica_server_name LIKE @ModifyReplicaPattern;
