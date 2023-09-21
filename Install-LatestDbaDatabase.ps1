@@ -76,6 +76,13 @@ foreach($instance in $InstanceName) {
     }
     
 
+    #Then types
+    Write-Verbose "`n        ***Creating/Updating Types `n"
+    $fileList = Get-ChildItem -Path .\types -Recurse
+    Foreach ($file in $fileList){
+        Write-Verbose $file.FullName
+        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
+    }
     #Then views
     Write-Verbose "`n        ***Creating/Updating Views `n"
     $fileList = Get-ChildItem -Path .\views -Recurse
