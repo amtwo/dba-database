@@ -1,4 +1,4 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.PlanGuide_SetHintForProcedureStatement'))
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.PlanGuide_SetHintForProcedureStatement'))
     EXEC ('CREATE PROCEDURE dbo.PlanGuide_SetHintForProcedureStatement AS SELECT ''This is a stub''')
 GO
 
@@ -75,17 +75,12 @@ BEGIN
     );
 
     WITH QueryDetails AS (
-        SELECT  DbName = db_name(ps.database_id),
-                StatementText = COALESCE(SUBSTRING(t.text, (qs.statement_start_offset/2)+1, (
-                                    (CASE qs.statement_end_offset
-                                        WHEN -1 THEN DATALENGTH(t.text)
-                                        ELSE qs.statement_end_offset
-                                        END - qs.statement_start_offset)
-                                    /2) + 1),''),
+        SELECT  DbName = t.DbName,
+                StatementText = t.StatementText,
                 qs.*
         FROM sys.dm_exec_procedure_stats ps
         JOIN sys.dm_exec_query_stats qs ON ps.sql_handle = qs.sql_handle
-        CROSS APPLY sys.dm_exec_sql_text(ps.sql_handle) t
+        CROSS APPLY dbo.ParseStatementByOffset(ps.sql_handle, qs.statement_start_offset, qs.statement_end_offset) t
         WHERE ps.object_id = object_id(@ProcedureFQN)
         AND ps.database_id = db_id(@DbName)
         )
