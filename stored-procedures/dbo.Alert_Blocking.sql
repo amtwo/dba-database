@@ -5,7 +5,7 @@ GO
 ALTER PROCEDURE dbo.Alert_Blocking
     @BlockingDurationThreshold smallint = 60,
     @BlockedSessionThreshold smallint = NULL,
-    @EmailRecipients varchar(max) = 'you@yourdomain.com',
+    @EmailRecipients varchar(max) = 'you@example.com',
     @EmailThreshold smallint = 10,
     @Debug tinyint = 0
 AS
@@ -69,6 +69,7 @@ DECLARE @Id int = 1,
         @ObjectName nvarchar(256),
         @IndexName nvarchar(256),
         @Sql nvarchar(max),
+        @EmailFromDomain varchar(max),
         @EmailFrom varchar(max),
         @EmailBody nvarchar(max),
         @EmailSubject nvarchar(255);
@@ -500,11 +501,20 @@ BEGIN
     SELECT @EmailBody = REPLACE(@EmailBody,'&lt;','<');
     SELECT @EmailBody = REPLACE(@EmailBody,'&gt;','>');
 
+    SELECT @EmailFromDomain = UnicodeValue
+    FROM dbo.Config
+    WHERE ConfigCode = 'EMAILALRTDOMAIN';
+
+    IF LEFT(@EmailFromDomain ,1) <> '@'
+    BEGIN
+        SET @EmailFromDomain = '@' + @EmailFromDomain;
+    END
+
     --In Debug Mode = 0, send the email
     IF (@Debug = 0)
     BEGIN
         SET @EmailSubject = 'ALERT: Blocking Detected';
-        SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + '@yourdomain.com>';
+        SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + @EmailFromDomain;
 
         EXEC msdb.dbo.sp_send_dbmail
             @recipients = @EmailRecipients,

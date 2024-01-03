@@ -59,3 +59,9 @@ BEGIN
     INSERT INTO dbo.Config (ConfigCode, ConfigCategory, ConfigName, UnicodeValue)
     VALUES ('EMAILALRTBGCOLOR', 'Alerting', 'Email Background Color Alert', '#FEF1E4')
 END;
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Config WHERE ConfigCode = 'EMAILALRTDOMAIN')
+BEGIN
+    INSERT INTO dbo.Config (ConfigCode, ConfigCategory, ConfigName, UnicodeValue)
+    VALUES ('EMAILALRTDOMAIN', 'Alerting', 'Email Sender Domain', 'example.com')
+END;
