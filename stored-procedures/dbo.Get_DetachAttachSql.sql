@@ -21,13 +21,11 @@ CREATED: 20240304
     Designed to be used for server migrations or other work where you may need to 
     detach and/or attach every database on an instance. 
 
-    All parameters are inherited from `sp_ineachdb`, and used to control which database(s)
-    are included in the output.
-
-    Please don't abuse detach & attach.
+    Please don't abuse detach & attach. This isn't how you back up a database, y'all.
     
 PARAMETERS
-* None
+    All parameters are inherited from `sp_ineachdb`, and used to control which database(s)
+    are included in the output.
 **************************************************************************************************
 MODIFICATIONS:
     YYYYMMDDD - Initials - Description of changes
@@ -37,53 +35,54 @@ MODIFICATIONS:
     ©2014-2020 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
-DROP TABLE IF EXISTS #AttachSql;
-CREATE TABLE #AttachSql (
-    DatabaseId int,
-    DbName     sysname,
-    AttachSql  nvarchar(max)
-    );
-
-DECLARE @ineachdb_sql nvarchar(max);
-
-SET @ineachdb_sql = N'DECLARE @sql nvarchar(max) = N''CREATE DATABASE '' + QUOTENAME(DB_NAME()) + N''
-                        ON '';
-
-                        SELECT @sql += N'' (FILENAME = '' + QUOTENAME(physical_name,CHAR(39)) + N''),'' + CHAR(13) + CHAR(10)
-                        FROM sys.database_files;
-
-                        SET @sql = LEFT(@sql,LEN(@sql)-1)
-
-                        SET @sql += N'' FOR ATTACH;''
-
-                        SELECT db_id(), db_name(), @sql';
-
-INSERT INTO #AttachSql (DatabaseId, DbName, AttachSql)
-EXEC dba.dbo.sp_ineachdb 
-    @command              =  @ineachdb_sql,
-    @name_pattern         = @name_pattern,
-    @database_list        = @database_list,
-    @exclude_pattern      = @exclude_pattern,
-    @exclude_list         = @exclude_list,
-    @recovery_model_desc  = @recovery_model_desc,
-    @compatibility_level  = @compatibility_level,
-    @state_desc           = @state_desc,
-    @is_read_only         = @is_read_only;
-
-
-WITH DetachSql AS (
-        SELECT 
-            DatabaseId  = database_id, 
-            DbName      = name, 
-            DetachSQL   = N'EXEC sp_detach_db @dbname = ' + QUOTENAME(name) + ', @skipchecks = ''true'';'
-        FROM sys.databases
-        where name NOT IN ('master','tempdb','model','msdb','distribution','dba')
-        )
-SELECT a.DatabaseId, a.DbName, d.DetachSQL, a.AttachSql
-FROM #AttachSql AS a
-JOIN DetachSql  AS d ON d.DatabaseId = a.DatabaseId
-ORDER BY a.DbName;
-
+BEGIN
+    DROP TABLE IF EXISTS #AttachSql;
+    CREATE TABLE #AttachSql (
+        DatabaseId int,
+        DbName     sysname,
+        AttachSql  nvarchar(max)
+        );
+    
+    DECLARE @ineachdb_sql nvarchar(max);
+    
+    SET @ineachdb_sql = N'DECLARE @sql nvarchar(max) = N''CREATE DATABASE '' + QUOTENAME(DB_NAME()) + N''
+                            ON '';
+    
+                            SELECT @sql += N'' (FILENAME = '' + QUOTENAME(physical_name,CHAR(39)) + N''),'' + CHAR(13) + CHAR(10)
+                            FROM sys.database_files;
+    
+                            SET @sql = LEFT(@sql,LEN(@sql)-1)
+    
+                            SET @sql += N'' FOR ATTACH;''
+    
+                            SELECT db_id(), db_name(), @sql';
+    
+    INSERT INTO #AttachSql (DatabaseId, DbName, AttachSql)
+    EXEC dbo.sp_ineachdb 
+        @command              =  @ineachdb_sql,
+        @name_pattern         = @name_pattern,
+        @database_list        = @database_list,
+        @exclude_pattern      = @exclude_pattern,
+        @exclude_list         = @exclude_list,
+        @recovery_model_desc  = @recovery_model_desc,
+        @compatibility_level  = @compatibility_level,
+        @state_desc           = @state_desc,
+        @is_read_only         = @is_read_only;
+    
+    
+    WITH DetachSql AS (
+            SELECT 
+                DatabaseId  = database_id, 
+                DbName      = name, 
+                DetachSQL   = N'EXEC sp_detach_db @dbname = ' + QUOTENAME(name) + ', @skipchecks = ''true'';'
+            FROM sys.databases
+            where name NOT IN ('master','tempdb','model','msdb','distribution','dba')
+            )
+    SELECT a.DatabaseId, a.DbName, d.DetachSQL, a.AttachSql
+    FROM #AttachSql AS a
+    JOIN DetachSql  AS d ON d.DatabaseId = a.DatabaseId
+    ORDER BY a.DbName;
+END
 
 GO
 
