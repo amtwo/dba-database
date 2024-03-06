@@ -59,7 +59,7 @@ BEGIN
     
     INSERT INTO #AttachSql (DatabaseId, DbName, AttachSql)
     EXEC dbo.sp_ineachdb 
-        @command              =  @ineachdb_sql,
+        @command              = @ineachdb_sql,
         @name_pattern         = @name_pattern,
         @database_list        = @database_list,
         @exclude_pattern      = @exclude_pattern,
@@ -76,7 +76,6 @@ BEGIN
                 DbName      = name, 
                 DetachSQL   = N'EXEC sp_detach_db @dbname = ' + QUOTENAME(name) + ', @skipchecks = ''true'';'
             FROM sys.databases
-            where name NOT IN ('master','tempdb','model','msdb','distribution','dba')
             )
     SELECT a.DatabaseId, a.DbName, d.DetachSQL, a.AttachSql
     FROM #AttachSql AS a
