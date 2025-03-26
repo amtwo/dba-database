@@ -18,7 +18,20 @@ BEGIN
                     + CASE WHEN VarbinaryValue  IS NULL THEN 0 ELSE 1 END
                     ) <= 1
                  )
-    ) ON [DATA];
+    ) 
+
+   /*
+      I think you can skip specifying the database filegroup
+      not everyone would have a file group named DATA 
+      it seems most people would have a file group named PRIMARY
+    */
+
+    /*
+      -- ON [DATA]
+    */
+
+    ;
+   
 END
 GO
 
