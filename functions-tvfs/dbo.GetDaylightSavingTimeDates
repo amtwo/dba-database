@@ -1,0 +1,24 @@
+CREATE or ALTER FUNCTION dbo.GetDaylightSavingTimeDates (@Year INT)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH DSTCalculation AS
+    (
+        SELECT
+            DSTYear = @Year,
+            -- Calculate the second Sunday in March
+            DSTStart = DATEADD(DAY, 
+                            (15 - DATEPART(weekday, DATEFROMPARTS(@Year, 3, 1))) % 7 + 7, 
+                            DATEFROMPARTS(@Year, 3, 1)),
+            -- Calculate the first Sunday in November
+            DSTEnd  = DATEADD(DAY, 
+                            (8 - DATEPART(weekday, DATEFROMPARTS(@Year, 11, 1))) % 7, 
+                            DATEFROMPARTS(@Year, 11, 1))
+    )
+    SELECT
+        *
+    FROM
+        DSTCalculation
+);
+GO
