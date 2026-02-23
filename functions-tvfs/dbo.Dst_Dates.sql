@@ -1,9 +1,4 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.Dst_Dates'))
-    EXEC ('CREATE FUNCTION dbo.Dst_Dates() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' )
-GO
-
-
-CREATE FUNCTION dbo.Dst_Dates(
+﻿CREATE OR ALTER FUNCTION dbo.Dst_Dates(
 			@InputDate DATE, 
 			@Locality CHAR(3) = 'USA')
 RETURNS TABLE
