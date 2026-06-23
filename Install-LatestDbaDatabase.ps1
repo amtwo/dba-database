@@ -22,6 +22,13 @@ a different name, specify it here.
 By default, this installer assumes that you've got the open source stuff in the right spot. If you don't
 want to install those packages, just pass in $true for this, and it'll skip all of them.
 
+.PARAMETER SQLAuthCredential
+By default, this installer uses Trusted/Windows authentication. If a PoSH credential object is supplied with 
+this parameter, then SQL authentication will be used.
+
+.PARAMETER TrustServerCertificate
+This is used to bypass encryption certificate enforcement required as of late 2022/2023 by .NET libraries. Better
+idea: configure your environment properly! This is a last-ditch parameter for legacy environments.
  
 .EXAMPLE
 Install-LatestDbaDatabase AM2Prod
@@ -41,12 +48,26 @@ param (
     [Parameter(Position=1,mandatory=$false)]
         [string]$DatabaseName = 'DBA',
     [Parameter(Position=2,mandatory=$false)]
-        [boolean]$SkipOSS = $false
+        [boolean]$SkipOSS = $false,
+    [Parameter(Position=3,mandatory=$false)]
+        [System.Management.Automation.Credential()]$SQLAuthCredential = [System.Management.Automation.PSCredential]::Empty,
+    [Parameter(Position=4,mandatory=$false)]
+        [switch]$TrustServerCertificate
     )
+
+$params = @{}
+
+if ($SQLAuthCredential -ne [System.Management.Automation.PSCredential]::Empty) {
+    $params.Add('Credential', $SQLAuthCredential)
+}
+
+if ($TrustServerCertificate) {
+    $params.Add('TrustServerCertificate', $true)
+}
 
 #Get Time Zone info from the OS. We'll use this to populate a table later
 $TimeZoneInfo = Get-TimeZone -ListAvailable | 
-    Add-Member -MemberType AliasProperty -Name TimeZoneId -Value Id -PassThru | Select-Object TimeZoneId, DisplayName, StandardName, DaylightName, SupportsDaylightSavingTime
+    Add-Member -MemberType AliasProperty -Name TimeZoneId -Value Id -PassThru -Force | Select-Object TimeZoneId, DisplayName, StandardName, DaylightName, SupportsDaylightSavingTime
 
 # Process servers in a loop. I could do this parallel, but doing it this way is fast enough for me.
 foreach($instance in $InstanceName) {
@@ -56,7 +77,7 @@ foreach($instance in $InstanceName) {
     #Create the database - SQL Script contains logic to be conditional & not clobber existing database
     Write-Verbose "`n        ***Creating Database if necessary `n"
     try{
-        Invoke-Sqlcmd -ServerInstance $instance -Database master -InputFile .\create-database.sql -Variable "DbName=$($DatabaseName)"
+        Invoke-Sqlcmd @params -ServerInstance $instance -Database master -InputFile .\create-database.sql -Variable "DbName=$($DatabaseName)"
     }
     catch{
         Write-Error -Message "Failed creating DBA Database" -ErrorAction Stop
@@ -67,12 +88,12 @@ foreach($instance in $InstanceName) {
     $fileList = Get-ChildItem -Path .\tables -Recurse
     Foreach ($file in $fileList){
         Write-Verbose $file.FullName
-        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
+        Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
     }
     # Populate the TimeZones table with the object we populated earlier, but only if the table is empty
-    if((Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -Query 'SELECT RowCnt = COUNT(*) FROM dbo.TimeZones').RowCnt -eq 0){
+    if((Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -Query 'SELECT RowCnt = COUNT(*) FROM dbo.TimeZones').RowCnt -eq 0){
         Write-Verbose "Populating dbo.TimeZones"
-        Write-SqlTableData  -ServerInstance $instance -Database $DatabaseName -SchemaName "dbo" -Table "TimeZones" -InputData $TimeZoneInfo
+        Write-SqlTableData @params -ServerInstance $instance -Database $DatabaseName -SchemaName "dbo" -Table "TimeZones" -InputData $TimeZoneInfo
     }
     
 
@@ -81,35 +102,35 @@ foreach($instance in $InstanceName) {
     $fileList = Get-ChildItem -Path .\types -Recurse
     Foreach ($file in $fileList){
         Write-Verbose $file.FullName
-        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
+        Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
     }
     #Then views
     Write-Verbose "`n        ***Creating/Updating Views `n"
     $fileList = Get-ChildItem -Path .\views -Recurse
     Foreach ($file in $fileList){
         Write-Verbose $file.FullName
-        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
+        Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName -QueryTimeout 300
     }
     #Then scalar functions
     Write-Verbose "`n        ***Creating/Updating Scalar Functions `n"
     $fileList = Get-ChildItem -Path .\functions-scalar -Recurse
     Foreach ($file in $fileList){
         Write-Verbose $file.FullName
-        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
+        Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
     }
     #Then TVFs
     Write-Verbose "`n        ***Creating/Updating Table-Valued Functions `n"
     $fileList = Get-ChildItem -Path .\functions-tvfs -Recurse
     Foreach ($file in $fileList){
         Write-Verbose $file.FullName
-        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
+        Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
     }
     #Then Procedures
     Write-Verbose "`n        ***Creating/Updating Stored Procedures `n"
     $fileList = Get-ChildItem -Path .\stored-procedures -Recurse -Filter *.sql
     Foreach ($file in $fileList){
         Write-Verbose $file.FullName
-        Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
+        Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
     }
     #Skip Open Source procedures if asked
     If ($SkipOSS -eq $false){
@@ -118,28 +139,28 @@ foreach($instance in $InstanceName) {
         $fileList = Get-ChildItem -Path .\oss\firstresponderkit -Recurse -Filter *.sql
         Foreach ($file in $fileList){
             Write-Verbose $file.FullName
-            Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
+            Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
         }
         #Then sp_whoisactive
         Write-Verbose "`n        ***Creating/Updating sp_WhoIsActive `n"
         $fileList = Get-ChildItem -Path .\oss\whoisactive -Recurse -Filter *.sql
         Foreach ($file in $fileList){
             Write-Verbose $file.FullName
-            Invoke-Sqlcmd -ServerInstance $instance -Database master -InputFile $file.FullName
+            Invoke-Sqlcmd @params -ServerInstance $instance -Database master -InputFile $file.FullName
         }
         ## WOO HOO! Ola's code is idempotent now!
         Write-Verbose "`n        ***Creating/Updating Ola Hallengren Maintenance Solution `n"
         $fileList = Get-ChildItem -Path .\oss\olahallengren -Recurse -Filter *.sql
         Foreach ($file in $fileList){
             Write-Verbose $file.FullName
-            Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
+            Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
         }
         ## That Erik. He's such a Darling.
         Write-Verbose "`n        ***Creating/Updating Darling's Dandy Data Troubleshooting scripts `n"
         $fileList = Get-ChildItem -Path .\oss\darlingdata -Recurse -Filter *.sql
         Foreach ($file in $fileList){
             Write-Verbose $file.FullName
-            Invoke-Sqlcmd -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
+            Invoke-Sqlcmd @params -ServerInstance $instance -Database $DatabaseName -InputFile $file.FullName
         }
     }
 
