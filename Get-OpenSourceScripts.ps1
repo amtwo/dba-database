@@ -26,8 +26,8 @@ Invoke-WebRequest -Uri "$($url)/sp_ineachdb.sql" -OutFile "$($dir)\oss\firstresp
 
 # sp_WhoIsActive
 New-Item -Path "$($dir)\oss\whoisactive" -ItemType Directory -Force |Out-Null
-$url = "https://raw.githubusercontent.com/amachanic/sp_whoisactive/master"
-Invoke-WebRequest -Uri "$($url)/who_is_active.sql" -OutFile "$($dir)\oss\whoisactive\who_is_active.sql"
+$url = "https://raw.githubusercontent.com/amachanic/sp_whoisactive/refs/heads/master"
+Invoke-WebRequest -Uri "$($url)/sp_WhoIsActive.sql" -OutFile "$($dir)\oss\whoisactive\who_is_active.sql"
 
 
 # Darling Data Troubleshooting scripts
