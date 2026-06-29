@@ -45,7 +45,7 @@ SET @sql = @sql + 'EXEC sp_addsubscription
 IF @Debug = 0
     EXEC sp_executesql @sql;
 ELSE
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
 
 --Create the agent job
 SET @sql = 'USE [' + @PubDbName + ']' + CHAR(10) + CHAR(13);
@@ -73,7 +73,7 @@ SET @sql = @sql + 'EXEC sp_addpushsubscription_agent
 IF @Debug = 0
     EXEC sp_executesql @sql;
 ELSE
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
 GO
 
 

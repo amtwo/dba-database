@@ -67,7 +67,7 @@ SELECT @sql = N'SELECT @ChunkID = MIN(' + QUOTENAME(@IDColumnName) + N'), @MaxID
 
 IF @Debug = 1
 BEGIN
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
 END;
 -- Even in Debug mode, we run this to get min/max values. We're not changing data yet.
 EXEC sp_executesql @stmt = @sql, @params = N'@RetainDays int, @ChunkID bigint OUT, @MaxID bigint OUT', @RetainDays = @RetainDays, @ChunkID = @ChunkID OUT, @MaxID = @MaxID OUT;
@@ -89,7 +89,7 @@ WHILE @ChunkID < @MaxID
         --if we're in debug mode, just print the DELETE statement
         ELSE
             BEGIN
-                PRINT @sql;
+                EXEC dbo.Debug_Print @DebugMessage = @sql;
             END;
     END;
 GO

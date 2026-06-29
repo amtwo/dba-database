@@ -113,9 +113,10 @@ BEGIN
     ORDER BY additional_duration_workload DESC  
     OPTION (MERGE JOIN);';
 
-    PRINT @CheckSql;
+    IF @Debug = 1
+        EXEC dbo.Debug_Print @DebugMessage = @CheckSql;
 
-    EXEC DBA.dbo.sp_ineachdb 
+    EXEC DBA.dbo.sp_ineachdb
         @command              = @CheckSQL,
         @print_command        = @Debug,
         @name_pattern         = @DbNamePattern,

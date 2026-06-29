@@ -209,6 +209,6 @@ IF @Debug = 0
   END
 ELSE
   BEGIN
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
   END;
 GO

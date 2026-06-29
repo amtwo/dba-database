@@ -8,7 +8,8 @@ ALTER PROCEDURE dbo.Check_FileSize
     @Drive char(1) = NULL,
     @IncludeDataFiles bit = 1,
     @IncludeLogFiles bit = 1,
-    @OrderBy nvarchar(100) = NULL
+    @OrderBy nvarchar(100) = NULL,
+    @Debug bit = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -23,6 +24,7 @@ PARAMETERS
 * @IncludeLogFiles  - Default 1 (True) - Flag to enable checking of log file sizes. Defaults to true.
 * @OrderBy - Default NULL - The value used in the order by clause of the result set.
                             When NULL or an invalid value passed, ordered by ServerName, DbName, LogicalFileName
+* @Debug  - Default 0 (False) - When 1, PRINT the dynamic SQL before running it.
 
 EXAMPLES:
 * Check File size/usage for internal_tracking database
@@ -122,7 +124,8 @@ IF @Drive IS NOT NULL
 --include order by
 SET @sql = @sql + N' ORDER BY ' + @OrderBy;
 
-PRINT @sql;
+IF @Debug = 1
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
 
 EXEC sys.sp_executesql @sql;
 

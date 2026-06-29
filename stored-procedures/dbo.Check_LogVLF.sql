@@ -4,7 +4,8 @@ GO
 
 
 ALTER PROCEDURE dbo.Check_LogVLF
-    @Threshold tinyint = 0
+    @Threshold tinyint = 0,
+    @Debug bit = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -14,8 +15,9 @@ CREATED: 20141001
     The @Threshold controls what DBs should be included in the result set
        
 PARAMETERS
-* @Threshold - Default 0 - Number of VLFs. Can be used to filter out databases with a small 
+* @Threshold - Default 0 - Number of VLFs. Can be used to filter out databases with a small
                 number of VLFs, in case you don't care about those.
+* @Debug     - Default 0 (False) - When 1, PRINT the per-database DBCC LOGINFO dynamic SQL.
 EXAMPLES:
 
 
@@ -71,7 +73,8 @@ WHILE @@FETCH_STATUS=0
         SET @sql='Insert #LogInfo(fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn) Exec(''DBCC loginfo ('+QUOTENAME(@dbname)+')'')';
     ELSE 
         SET @sql='Insert #LogInfo(RecoveryUnitID, fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn) Exec(''DBCC loginfo ('+QUOTENAME(@dbname)+')'')';
-    PRINT @sql;
+    IF @Debug = 1
+        EXEC dbo.Debug_Print @DebugMessage = @sql;
     EXEC sys.sp_executesql @stmt = @sql;
     UPDATE #Results SET vlf=(SELECT COUNT(*) FROM #LogInfo) WHERE dbname=@DbName;
     FETCH Next FROM db_cur INTO @DbName;

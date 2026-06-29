@@ -175,7 +175,7 @@ SELECT [database]     = DB_NAME(),
     IF @debug = 1
     BEGIN
       RAISERROR(N'Running dynamic SQL on %s:', 1, 0, @db);
-      PRINT @sql;
+      EXEC dbo.Debug_Print @DebugMessage = @sql;
     END
     ELSE
     BEGIN
@@ -243,7 +243,7 @@ SELECT [database]     = DB_NAME(),
     IF @debug = 1
     BEGIN
       PRINT N'Running this for jobs:';
-      PRINT @sql;
+      EXEC dbo.Debug_Print @DebugMessage = @sql;
     END
     ELSE
     BEGIN

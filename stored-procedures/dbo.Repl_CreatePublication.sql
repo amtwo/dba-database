@@ -64,7 +64,7 @@ SET @sql = @sql + N'EXEC sp_replicationdboption
 IF @Debug = 0
     EXEC sp_executesql @sql;
 ELSE
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
 
 -- Adding the transactional publication
 SET @sql = 'USE [' + @PubDbName + '];' + CHAR(10) + CHAR(13);
@@ -98,7 +98,7 @@ SET @sql = @sql + N'EXEC sp_addpublication
 IF @Debug = 0
     EXEC sp_executesql @sql;
 ELSE
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
 
 
 -- Set snapshot agent to run on a schedule (hourly) to make sure new/changed articles 
@@ -123,7 +123,7 @@ SET @sql = @sql + 'exec sp_addpublication_snapshot
 IF @Debug = 0
     EXEC sp_executesql @sql;
 ELSE
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
 
 
 --If DB is in an AG, update distributor to know that
@@ -136,7 +136,7 @@ BEGIN
     IF @Debug = 0
         EXEC sp_executesql @sql;
     ELSE
-        PRINT @sql;
+        EXEC dbo.Debug_Print @DebugMessage = @sql;
 END;
 GO
 
