@@ -77,7 +77,7 @@ BEGIN
       
         IF @Debug = 1
         BEGIN
-            PRINT @sql;
+            EXEC dbo.Debug_Print @DebugMessage = @sql;
         END;
 
         INSERT INTO #Results (DbName, SchemaName, ObjectName, StatisticsList)
@@ -106,7 +106,7 @@ BEGIN
       
         IF @Debug = 1
         BEGIN
-            PRINT @sql;
+            EXEC dbo.Debug_Print @DebugMessage = @sql;
         END;
 
         INSERT INTO #Results (DbName, SchemaName, ObjectName, StatisticsList)
@@ -134,7 +134,7 @@ FROM #Results;
 
 IF @Debug = 1
 BEGIN
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
 END;
 
 IF @Debug = 0

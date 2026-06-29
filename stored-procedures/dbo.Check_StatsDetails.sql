@@ -1,6 +1,6 @@
 CREATE OR ALTER PROCEDURE dbo.Check_StatsDetails
     @DbName              sysname,
-    @Mode                varchar(10)   = 'ROLLUP',     -- DETAIL, ROLLUP, or ALL (see header)
+    @Mode                varchar(10)   = 'ROLLUP',     -- DETAIL/STAT, ROLLUP/TABLE, or ALL (see header)
     @SchemaName          sysname       = NULL,        -- Filter by schema
     @ObjectName          sysname       = NULL,        -- Filter by table
     @StatisticName       sysname       = NULL,        -- Filter by statistic/index name (DETAIL only)
@@ -22,16 +22,16 @@ CREATED: 20260629
     * Low sample percentages => NORECOMPUTE candidate
     * High histogram skew ratio => filtered statistics review candidate
 
-    @Mode controls the output granularity:
-    * DETAIL - One row per statistic, including per-stat sampling and histogram skew.
-    * ROLLUP - One row per table, collapsing the per-stat detail to spot tables where
-               one stat is under-sampled while its siblings are fine (an index-level
-               NORECOMPUTE candidate). This is the default.
-    * ALL    - Returns both result sets (DETAIL first, then ROLLUP).
+    @Mode controls the output granularity. Synonyms are accepted so you can use whichever reads best:
+    * DETAIL (or STAT)  - One row per statistic, including per-stat sampling and histogram skew.
+    * ROLLUP (or TABLE) - One row per table, collapsing the per-stat detail to spot tables where
+                          one stat is under-sampled while its siblings are fine (an index-level
+                          NORECOMPUTE candidate). This is the default.
+    * ALL               - Returns both result sets (DETAIL first, then ROLLUP).
 
 PARAMETERS
 * @DbName - Target database name.
-* @Mode - Output granularity: DETAIL (per-statistic), ROLLUP (per-table), or ALL (both). Defaults to ROLLUP.
+* @Mode - Output granularity: DETAIL/STAT (per-statistic), ROLLUP/TABLE (per-table), or ALL (both). Defaults to ROLLUP.
 * @SchemaName - Optional schema filter.
 * @ObjectName - Optional table filter.
 * @StatisticName - Optional statistic/index filter. Only meaningful for DETAIL.
@@ -80,8 +80,8 @@ EXAMPLES:
 MODIFICATIONS:
     20260629 - AM2 - Normalize formatting/comments to current repository style.
     20260629 - AM2 - Rename procedure to dbo.Check_StatsDetails to match filename.
-    20260629 - AM2 - Add @Mode (DETAIL/ROLLUP/ALL); promote the table-level rollup from an
-                     ad-hoc comment into a real, parameterized result set.
+    20260629 - AM2 - Add @Mode (DETAIL/STAT, ROLLUP/TABLE, ALL); promote the table-level rollup
+                     from an ad-hoc comment into a real, parameterized result set.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -97,13 +97,23 @@ BEGIN
         RETURN;
     END;
 
-    -- Normalize @Mode so callers don't get tripped up by case or stray whitespace,
-    -- then validate it against the supported set before doing any work.
+    -- Normalize @Mode so callers don't get tripped up by case or stray whitespace.
     SET @Mode = UPPER(LTRIM(RTRIM(@Mode)));
 
+    -- Collapse the friendly synonyms onto their canonical values, so the build logic
+    -- below only ever has to reason about DETAIL, ROLLUP, or ALL:
+    --   STAT  is an alias for DETAIL (per-statistic grain)
+    --   TABLE is an alias for ROLLUP (per-table grain)
+    SET @Mode = CASE @Mode
+                    WHEN 'STAT'  THEN 'DETAIL'
+                    WHEN 'TABLE' THEN 'ROLLUP'
+                    ELSE @Mode
+                END;
+
+    -- Validate against the canonical set before doing any work.
     IF @Mode NOT IN ('DETAIL', 'ROLLUP', 'ALL')
     BEGIN
-        RAISERROR('@Mode must be one of: DETAIL, ROLLUP, or ALL.', 16, 1);
+        RAISERROR('@Mode must be one of: DETAIL (or STAT), ROLLUP (or TABLE), or ALL.', 16, 1);
         RETURN;
     END;
 
@@ -302,7 +312,6 @@ BEGIN
     IF @Debug = 1
     BEGIN
         EXEC dbo.Debug_Print @DebugMessage = @sql;
-        RETURN;
     END;
 
     -- One unified parameter list serves both statements. ROLLUP simply doesn't reference the

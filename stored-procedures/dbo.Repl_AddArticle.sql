@@ -103,7 +103,7 @@ IF @Debug = 0
                 @UpdateCommand      = @UpdateCommand,
                 @DeleteCommand      = @DeleteCommand;
 ELSE
-    PRINT @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @sql;
     PRINT N'    Publication:   ' + @PublicationName
     PRINT N'    Article:       ' + @ArticleName
     PRINT N'    SchemaOption:  ' + CONVERT(nvarchar(max), @SchemaOption)

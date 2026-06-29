@@ -145,7 +145,7 @@ BEGIN
         END;
         IF (@Debug = 1)
         BEGIN
-            PRINT @sql;
+            EXEC dbo.Debug_Print @DebugMessage = @sql;
             PRINT '@PlanGuideName = ' + @PlanGuideName;
         END;
     END;
@@ -161,7 +161,7 @@ BEGIN
 
     IF (@Debug = 1)
     BEGIN
-        PRINT @sql;
+        EXEC dbo.Debug_Print @DebugMessage = @sql;
     END;
     IF (@Debug = 0)
     BEGIN
