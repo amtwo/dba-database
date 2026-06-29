@@ -1,0 +1,9 @@
+# Require people to pick a template rather than filing a blank issue.
+blank_issues_enabled: false
+contact_links:
+  - name: Install / setup trouble
+    url: https://github.com/amtwo/dba-database#to-install
+    about: Check the install instructions in the README before filing an issue.
+  - name: Security issue
+    url: https://github.com/amtwo/dba-database/blob/production/SECURITY.md
+    about: Please report security problems privately — see the security policy, don't open a public issue.
