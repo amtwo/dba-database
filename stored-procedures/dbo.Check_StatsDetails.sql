@@ -181,36 +181,7 @@ BEGIN
                                 AND (sk.MaxStepRows / sk.AvgStepRows) > @SkewCutoff
                                 THEN 1
                             ELSE 0
-                         END,
-        -- Recommended sample policy: big tables get a sample, everything else FULLSCAN.
-        RecSamplePolicy = CASE
-                            WHEN tr.RowCount_Alloc >= @N
-                                THEN CONCAT(N''SAMPLE '', @GiantPct, N'' PERCENT'')
-                            ELSE N''FULLSCAN''
-                          END,
-        -- Plain-language recommendation, evaluated most-severe-first.
-        RecAction = CASE
-                        WHEN @IncludeSkew = 1
-                             AND (sk.MaxStepRows / sk.AvgStepRows) > @SkewCutoff
-                            THEN N''REVIEW: skewed -> consider FILTERED STATISTICS on hot range''
-                        WHEN s.auto_created = 1
-                             AND CONVERT(decimal(5,2), 100.0 * sp.rows_sampled / NULLIF(sp.[rows], 0)) < @LowCutoff
-                            THEN N''NORECOMPUTE candidate (auto-stat under-sampling)''
-                        WHEN s.no_recompute = 0
-                             AND CONVERT(decimal(5,2), 100.0 * sp.rows_sampled / NULLIF(sp.[rows], 0)) < @LowCutoff
-                            THEN N''NORECOMPUTE candidate (low sample, autostats on)''
-                        ELSE N''OK / leave as BAU''
-                    END,
-        -- Copy/paste remediation statement for this specific stat.
-        FixSql = CONCAT(
-                    N''UPDATE STATISTICS '', QUOTENAME(sch.name), N''.'', QUOTENAME(o.name),
-                    N'' ('', QUOTENAME(s.name), N'') WITH '',
-                    CASE
-                        WHEN tr.RowCount_Alloc >= @N
-                            THEN CONCAT(N''SAMPLE '', @GiantPct, N'' PERCENT'')
-                        ELSE N''FULLSCAN''
-                    END,
-                    N'', NORECOMPUTE;'')
+                         END
     FROM sys.stats AS s
     JOIN sys.objects AS o
         ON o.object_id = s.object_id
@@ -283,17 +254,12 @@ BEGIN
         StatCount,
         NoRecompute,
         MaxModCounter,
-        RecSamplePolicy = CASE
-                            WHEN RowCount_Alloc >= @N
-                                THEN CONCAT(N''SAMPLE '', @GiantPct, N'' PERCENT'')
-                            ELSE N''FULLSCAN''
-                          END,
         -- Flag tables with a wide sampling spread: at least one stat well under the cutoff
         -- while another is sampled comfortably (>= 20%). That mix points at an index-level fix.
         IndexLevelExceptionFlag = CASE
                                     WHEN MinSamplePct < @LowCutoff
                                          AND MaxSamplePct >= 20.00
-                                        THEN N''Mixed: one stat under-sampled while others fine -> consider INDEX-level NORECOMPUTE''
+                                        THEN N''Mixed: one stat under-sampled while others fine -> investigate DETAIL-level stats''
                                     ELSE N''''
                                   END
     FROM StatDetail
