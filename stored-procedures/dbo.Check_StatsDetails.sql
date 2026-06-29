@@ -4,9 +4,7 @@ CREATE OR ALTER PROCEDURE dbo.Check_StatsDetails
     @SchemaName          sysname       = NULL,        -- Filter by schema
     @ObjectName          sysname       = NULL,        -- Filter by table
     @StatisticName       sysname       = NULL,        -- Filter by statistic/index name (DETAIL only)
-    @RowCountThreshold   bigint        = 10000000,    -- N rule: >= N rows uses sampled update
-    @GiantSamplePercent  tinyint       = 50,          -- Sample percent when table is >= N rows
-    @LowSamplePctCutoff  decimal(5,2)  = 5.00,        -- Low sample cutoff for NORECOMPUTE recommendation
+    @LowSamplePctCutoff  decimal(5,2)  = 5.00,        -- Low sample cutoff for flagging under-sampled stats
     @SkewRatioCutoff     decimal(10,2) = 100.00,      -- Histogram max/avg ratio considered skewed
     @OnlySuspicious      bit           = 0,           -- 1 = only rows that may need action (DETAIL only)
     @IncludeSkewAnalysis bit           = 1,           -- 0 = skip histogram analysis (DETAIL only)
@@ -15,12 +13,10 @@ AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 CREATED: 20260629
-    Read-only statistics recommendation report for a target database.
-    Applies the DB-747 policy model:
-    * Tables below @RowCountThreshold => FULLSCAN recommendation
-    * Tables at/above @RowCountThreshold => SAMPLE @GiantSamplePercent recommendation
-    * Low sample percentages => NORECOMPUTE candidate
-    * High histogram skew ratio => filtered statistics review candidate
+    Read-only statistics report for a target database. Surfaces per-statistic and per-table
+    sampling and histogram-skew detail so you can spot under-sampled or skewed statistics.
+    Recommendation/remediation logic (sample policy, NORECOMPUTE candidates, fix scripts)
+    is intentionally handled elsewhere -- this proc just reports the raw picture.
 
     @Mode controls the output granularity. Synonyms are accepted so you can use whichever reads best:
     * DETAIL (or STAT)  - One row per statistic, including per-stat sampling and histogram skew.
@@ -35,9 +31,7 @@ PARAMETERS
 * @SchemaName - Optional schema filter.
 * @ObjectName - Optional table filter.
 * @StatisticName - Optional statistic/index filter. Only meaningful for DETAIL.
-* @RowCountThreshold - Row count breakpoint for sample policy.
-* @GiantSamplePercent - Sample percentage for tables at or above the breakpoint.
-* @LowSamplePctCutoff - Threshold for low observed sample percentage.
+* @LowSamplePctCutoff - Threshold for flagging a low observed sample percentage.
 * @SkewRatioCutoff - Threshold for max-step-to-avg-step histogram ratio. Only used by DETAIL.
 * @OnlySuspicious - Return only rows with low sample or non-zero modification counter. Only used by DETAIL.
 * @IncludeSkewAnalysis - Include histogram analysis (heavier DMV access). Only used by DETAIL.
@@ -45,36 +39,36 @@ PARAMETERS
 
 EXAMPLES:
 -- Whole database, per-table rollup (the default):
--- EXEC dbo.Check_StatsDetails @DbName = N'Mobo';
+-- EXEC dbo.Check_StatsDetails @DbName = N'AMtwo';
 
 -- Per-statistic detail for the whole database:
--- EXEC dbo.Check_StatsDetails @DbName = N'Mobo', @Mode = 'DETAIL';
+-- EXEC dbo.Check_StatsDetails @DbName = N'AMtwo', @Mode = 'DETAIL';
 
 -- Both result sets at once:
--- EXEC dbo.Check_StatsDetails @DbName = N'Mobo', @Mode = 'ALL';
+-- EXEC dbo.Check_StatsDetails @DbName = N'AMtwo', @Mode = 'ALL';
 
 -- Single table, per-statistic detail:
 -- EXEC dbo.Check_StatsDetails
---     @DbName = N'Mobo',
+--     @DbName = N'AMtwo',
 --     @Mode = 'DETAIL',
 --     @SchemaName = N'dbo',
 --     @ObjectName = N'Order';
 
 -- Single statistic and skip skew analysis:
 -- EXEC dbo.Check_StatsDetails
---     @DbName = N'Mobo',
+--     @DbName = N'AMtwo',
 --     @Mode = 'DETAIL',
 --     @StatisticName = N'CUIX_OpenOrder',
 --     @IncludeSkewAnalysis = 0;
 
 -- Return only suspicious rows:
 -- EXEC dbo.Check_StatsDetails
---     @DbName = N'Mobo',
+--     @DbName = N'AMtwo',
 --     @Mode = 'DETAIL',
 --     @OnlySuspicious = 1;
 
 -- Print generated SQL only:
--- EXEC dbo.Check_StatsDetails @DbName = N'Mobo', @Debug = 1;
+-- EXEC dbo.Check_StatsDetails @DbName = N'AMtwo', @Debug = 1;
 
 **************************************************************************************************
 MODIFICATIONS:
@@ -82,6 +76,8 @@ MODIFICATIONS:
     20260629 - AM2 - Rename procedure to dbo.Check_StatsDetails to match filename.
     20260629 - AM2 - Add @Mode (DETAIL/STAT, ROLLUP/TABLE, ALL); promote the table-level rollup
                      from an ad-hoc comment into a real, parameterized result set.
+    20260629 - AM2 - Remove RecSamplePolicy/RecAction/FixSql columns (recommendation logic moves
+                     elsewhere); drop the now-unused @RowCountThreshold/@GiantSamplePercent params.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -284,17 +280,13 @@ BEGIN
     -- DETAIL-only parameters; passing them anyway is harmless and keeps the call site simple.
     EXEC sys.sp_executesql
         @sql,
-        N'@N bigint,
-          @GiantPct tinyint,
-          @LowCutoff decimal(5,2),
+        N'@LowCutoff decimal(5,2),
           @SkewCutoff decimal(10,2),
           @OnlySuspicious bit,
           @IncludeSkew bit,
           @SchemaName sysname,
           @ObjectName sysname,
           @StatisticName sysname',
-        @N              = @RowCountThreshold,
-        @GiantPct       = @GiantSamplePercent,
         @LowCutoff      = @LowSamplePctCutoff,
         @SkewCutoff     = @SkewRatioCutoff,
         @OnlySuspicious = @OnlySuspicious,

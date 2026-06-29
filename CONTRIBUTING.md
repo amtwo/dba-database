@@ -115,7 +115,7 @@ PARAMETERS
 
 EXAMPLES:
 -- The most common way you'd actually call this:
--- EXEC dbo.Check_StatsDetails @DbName = N'Mobo';
+-- EXEC dbo.Check_StatsDetails @DbName = N'AMtwo';
 
 **************************************************************************************************
 MODIFICATIONS:
