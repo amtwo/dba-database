@@ -1,0 +1,26 @@
+# EditorConfig (https://editorconfig.org)
+# Enforces the formatting conventions documented in CONTRIBUTING.md so you
+# don't have to think about it. Most modern editors honor this automatically.
+root = true
+
+# Defaults for everything
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# T-SQL: 4 spaces, no tabs (see CONTRIBUTING.md → Formatting)
+[*.sql]
+indent_style = space
+indent_size = 4
+
+# PowerShell (installer + helper scripts)
+[*.{ps1,psd1,psm1}]
+indent_style = space
+indent_size = 4
+
+# Markdown: leave trailing whitespace alone — two trailing spaces is a line break
+[*.md]
+trim_trailing_whitespace = false
