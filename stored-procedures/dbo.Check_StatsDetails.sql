@@ -177,7 +177,21 @@ BEGIN
                                 AND (sk.MaxStepRows / sk.AvgStepRows) > @SkewCutoff
                                 THEN 1
                             ELSE 0
-                         END
+                         END,
+        Findings = '''' 
+                            + CASE
+                                WHEN @IncludeSkew = 1 AND TRY_CONVERT(decimal(19,2), sk.MaxStepRows / sk.AvgStepRows) > 100
+                                    THEN ''Skew ratio > 100''
+                                ELSE ''''
+                            END + '' | '' + CASE 
+                                WHEN sp.rows_sampled * 100 < sp.[rows]
+                                    THEN ''sample size lower than 1%''
+                                ELSE ''''
+                            END + '' | '' + CASE 
+                                WHEN sp.rows_sampled * 100 < sp.[rows]
+                                    THEN ''sample size smaller than 1%''
+                                ELSE ''''
+                            END
     FROM sys.stats AS s
     JOIN sys.objects AS o
         ON o.object_id = s.object_id
