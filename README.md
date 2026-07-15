@@ -11,6 +11,10 @@ Some of this code (including the installer!) assumes that the First Responder Ki
 * **PowerShell with the `SqlServer` module** (the installer leans on `Invoke-Sqlcmd` and `Write-SqlTableData`).
 * Permission to create a database on the target instance (or a database that already exists for you to install into).
 
+### Supported SQL Server versions:
+* My goal is to support all versions of SQL Server that are currently supported by Microsoft. (2017+ as of 2026)
+* Many scripts work on versions as old as SQL Server 2005, as they were written when 2005 was still a supported version. New work is not tested on older, unsupported versions. 
+
 ### To install
 By default, the installer will create a database named `DBA` (if it doesn't already exist), and install all objects in that `DBA` database. You can deploy to a database named something other than `DBA` by using the `-DatabaseName` parameter on the install script. This install script assumes that you have permission to create the database, or that it already exists. 
 
