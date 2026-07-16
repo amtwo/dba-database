@@ -5,6 +5,7 @@ CREATE OR ALTER PROCEDURE dbo.Update_Statistics
     @SmallTableSamplePercent    tinyint  = NULL,          -- Small bucket sample (100 = FULLSCAN)
     @MediumTableSamplePercent   tinyint  = NULL,          -- Medium bucket sample (100 = FULLSCAN)
     @LargeTableSamplePercent    tinyint  = NULL,          -- Large bucket sample
+    @Buckets                    varchar(50) = NULL,       -- which size buckets to run; NULL = all (Small,Medium,Large)
     @SkewAnalysis               bit      = NULL,          -- 1 = bump skewed Medium/Large tables down a bucket
     @SkewRatioCutoff            decimal(10,2) = NULL,     -- max/avg histogram step ratio considered skewed
     @DisableAutoStatsThreshold  bigint   = NULL,          -- rows >= this -> sp_autostats OFF; NULL = never lock
@@ -60,10 +61,14 @@ EXAMPLES:
 -- Everything except the staging copies:
 -- EXEC dbo.Update_Statistics @DbList = N'USER_DATABASES, -%_staging';
 
+-- Large tables only, across all user databases (a slower cadence for the giants):
+-- EXEC dbo.Update_Statistics @DbList = N'USER_DATABASES', @Buckets = N'Large';
+
 **************************************************************************************************
 MODIFICATIONS:
     20260715 - AM2 - Initial version. Multi-database wrapper over dbo.Update_StatisticsSingleDB;
                      borrows Ola IndexOptimize's @Databases selection grammar.
+    20260716 - AM2 - Pass @Buckets through to the single-DB proc (run only selected size buckets).
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -310,6 +315,7 @@ BEGIN
                 @SmallTableSamplePercent     = @SmallTableSamplePercent,
                 @MediumTableSamplePercent    = @MediumTableSamplePercent,
                 @LargeTableSamplePercent     = @LargeTableSamplePercent,
+                @Buckets                     = @Buckets,
                 @SkewAnalysis                = @SkewAnalysis,
                 @SkewRatioCutoff             = @SkewRatioCutoff,
                 @DisableAutoStatsThreshold   = @DisableAutoStatsThreshold,

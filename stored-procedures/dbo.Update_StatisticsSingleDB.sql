@@ -5,6 +5,7 @@ CREATE OR ALTER PROCEDURE dbo.Update_StatisticsSingleDB
     @SmallTableSamplePercent    tinyint  = NULL,          -- Small bucket sample (100 = FULLSCAN)
     @MediumTableSamplePercent   tinyint  = NULL,          -- Medium bucket sample (100 = FULLSCAN)
     @LargeTableSamplePercent    tinyint  = NULL,          -- Large bucket sample
+    @Buckets                    varchar(50) = NULL,       -- which size buckets to run; NULL = all (Small,Medium,Large)
     @SkewAnalysis               bit      = NULL,          -- 1 = bump skewed Medium/Large tables down a bucket
     @SkewRatioCutoff            decimal(10,2) = NULL,     -- max/avg histogram step ratio considered skewed
     @DisableAutoStatsThreshold  bigint   = NULL,          -- rows >= this -> sp_autostats OFF; NULL = never lock
@@ -94,6 +95,16 @@ CREATED: 20260601
                  thousands of small tables. A Small table carrying its own sample override is
                  promoted OUT of the ALL_INDEXES sweep into its own explicit pass.
 
+    BUCKET SCHEDULING (@Buckets):
+    * The full worklist -- bucketing, skew, locking, unlock -- is always computed; @Buckets only
+      controls which passes actually EXECUTE. Name a subset (e.g. 'Large') to update just those size
+      buckets this run, so large tables can be scheduled on a slower cadence than small ones. Each
+      pass is tied to one size bucket; a pass whose bucket is not selected is skipped.
+    * EXCEPTION: forced (newly-locked) passes always run regardless of @Buckets. A table locked this
+      run must get its baseline refresh, so bucket scheduling can never leave a just-locked table
+      frozen. (Corollary of the NORECOMPUTE promise, now per bucket: if you lock tables in a bucket,
+      that bucket must stay on a schedule that runs often enough to keep them fresh.)
+
     This is a GENERIC wrapper: all policy lives in dbo.Config data, not in the code. Stock
     IndexOptimize and dbo.Config_Get are dependencies. See the repo README.
 
@@ -111,6 +122,10 @@ PARAMETERS
 * @SmallTableSamplePercent - Sample percent for the Small bucket. 100 = FULLSCAN.
 * @MediumTableSamplePercent - Sample percent for the Medium bucket. 100 = FULLSCAN.
 * @LargeTableSamplePercent - Sample percent for the Large bucket.
+* @Buckets - Comma-separated size buckets to process this run: any of Small, Medium, Large
+             (case-insensitive). NULL or empty = all three (the normal case). Use a subset to run
+             one size class on its own cadence, e.g. @Buckets = 'Large'. Forced refreshes of tables
+             locked this run always execute regardless of @Buckets (see BUCKET SCHEDULING above).
 * @SkewAnalysis - 1 reads histograms for Medium/Large tables and bumps any skewed table down one
                   bucket (Large->Medium, Medium->Small) so it gets the next-larger sample percent.
                   0 (default) skips the histogram read entirely. A table with an explicit bucket
@@ -130,12 +145,19 @@ PARAMETERS
 * @Debug - 1 prints the worklist, the sp_autostats calls, and every IndexOptimize call, and
            changes nothing.
 
-  Every knob above except @DbName / @Debug defaults to NULL and is resolved from dbo.Config
-  (category 'StatisticsMaint') when not passed; an explicit value always wins.
+  Every knob above except @DbName / @Buckets / @Debug defaults to NULL and is resolved from
+  dbo.Config (category 'StatisticsMaint') when not passed; an explicit value always wins. @Buckets
+  is a per-run scheduling control (which passes execute), not a Config-backed policy value.
 
 EXAMPLES:
 -- Fully config-driven (the normal case -- the Agent job step is just this):
 -- EXEC dbo.Update_StatisticsSingleDB @DbName = N'MyDb';
+
+-- Large tables only (e.g. a slower weekly cadence for the giants):
+-- EXEC dbo.Update_StatisticsSingleDB @DbName = N'MyDb', @Buckets = N'Large';
+
+-- Small + medium tables (the nightly cadence, giants handled separately):
+-- EXEC dbo.Update_StatisticsSingleDB @DbName = N'MyDb', @Buckets = N'Small,Medium';
 
 -- See exactly what it would do, without touching anything:
 -- EXEC dbo.Update_StatisticsSingleDB @DbName = N'MyDb', @Debug = 1;
@@ -161,6 +183,10 @@ MODIFICATIONS:
                      (exclude / force sample / force bucket) read from the 'STATOVERRIDE' JSON row.
                      Pass assembly now groups by effective sample so per-table samples work; a
                      small table with a sample override is promoted out of the ALL_INDEXES sweep.
+    20260716 - AM2 - Rename to Update_StatisticsSingleDB (multi-DB wrapper is dbo.Update_Statistics).
+    20260716 - AM2 - Add @Buckets: run only selected size buckets (Small/Medium/Large) this run so a
+                     size class can be scheduled on its own cadence. Passes now carry their bucket and
+                     are filtered at execution; forced (newly-locked) passes always run.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -242,6 +268,41 @@ BEGIN
     BEGIN
         RAISERROR('@StatisticsModificationLevel must be between 1 and 100, or NULL.', 16, 1);
         RETURN;
+    END;
+
+    -- Which size buckets to process this run. NULL/empty = all three (the normal case). Naming a
+    -- subset lets a schedule run, say, Large tables on their own (less frequent) cadence separate
+    -- from the small/medium tables. Parsed case-insensitively; unknown tokens are rejected.
+    -- UNIQUE (not PK) so the column stays nullable: an unrecognized token maps to a single NULL
+    -- sentinel we detect below. SQL Server allows exactly one NULL under UNIQUE, and the DISTINCT
+    -- insert collapses multiple bad tokens to that one NULL, so the constraint always holds.
+    DECLARE @SelectedBuckets TABLE (Bucket varchar(6) NULL UNIQUE);
+
+    IF @Buckets IS NULL OR LEN(LTRIM(RTRIM(@Buckets))) = 0
+    BEGIN
+        INSERT INTO @SelectedBuckets (Bucket) VALUES ('Small'), ('Medium'), ('Large');
+    END;
+    ELSE
+    BEGIN
+        -- Map each token to its canonical bucket name; an unrecognized token maps to NULL so we can
+        -- detect and reject it below (the table allows NULL precisely so the bad value lands here
+        -- rather than erroring on insert).
+        INSERT INTO @SelectedBuckets (Bucket)
+        SELECT DISTINCT
+            CASE LOWER(LTRIM(RTRIM(value)))
+                WHEN 'small'  THEN 'Small'
+                WHEN 'medium' THEN 'Medium'
+                WHEN 'large'  THEN 'Large'
+            END
+        FROM STRING_SPLIT(@Buckets, ',')
+        WHERE LTRIM(RTRIM(value)) <> '';
+
+        -- Any token that didn't map to a real bucket is a typo -> fail loudly.
+        IF EXISTS (SELECT 1 FROM @SelectedBuckets WHERE Bucket IS NULL)
+        BEGIN
+            RAISERROR('@Buckets may only contain Small, Medium, and/or Large (comma-separated).', 16, 1);
+            RETURN;
+        END;
     END;
 
     -- A histogram's max step is always >= its average step, so the ratio is always >= 1.
@@ -706,7 +767,9 @@ BEGIN
 
     DECLARE @Passes TABLE (
         PassId       int IDENTITY(1,1) PRIMARY KEY,
-        PassName     varchar(20)   NOT NULL,
+        PassName     varchar(30)   NOT NULL,
+        Bucket       varchar(6)    NOT NULL,   -- which size bucket this pass serves (for @Buckets filtering)
+        IsForced     bit           NOT NULL,   -- 1 = newly-locked baseline pass; always runs regardless of @Buckets
         Indexes      nvarchar(max) NOT NULL,
         SamplePercent tinyint      NOT NULL,
         OnlyModified char(1)       NOT NULL,
@@ -716,12 +779,16 @@ BEGIN
     DECLARE @dbQuoted nvarchar(258) = QUOTENAME(@DbName),
             @idx      nvarchar(max);
 
-    --- Explicit-include passes: one per (IsNewlyLocked, EffectiveSample) group. A group always has
-    --- at least one row, so STRING_AGG is never NULL here. Excluded and swept tables are left out.
-    INSERT INTO @Passes (PassName, Indexes, SamplePercent, OnlyModified, ModLevel)
+    --- Explicit-include passes: one per (IsNewlyLocked, Bucket, EffectiveSample) group. Grouping by
+    --- Bucket (as well as sample) keeps each pass tied to a single size bucket so @Buckets can filter
+    --- it at execution time. A group always has at least one row, so STRING_AGG is never NULL here.
+    --- Excluded and swept tables are left out.
+    INSERT INTO @Passes (PassName, Bucket, IsForced, Indexes, SamplePercent, OnlyModified, ModLevel)
     SELECT
         PassName = CASE WHEN IsNewlyLocked = 1 THEN 'Forced-' ELSE 'Normal-' END
-                    + CONVERT(varchar(10), EffectiveSample),
+                    + Bucket + '-' + CONVERT(varchar(10), EffectiveSample),
+        Bucket   = Bucket,
+        IsForced = IsNewlyLocked,
         Indexes  = STRING_AGG(CONVERT(nvarchar(max), @dbQuoted + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'.%'), N','),
         SamplePercent = EffectiveSample,
         OnlyModified  = CASE WHEN IsNewlyLocked = 1 THEN 'N' ELSE @normalOms END,
@@ -729,10 +796,11 @@ BEGIN
     FROM #Worklist
     WHERE ISNULL(OvExclude, 0) = 0                              -- excluded tables get no include pass
       AND NOT (Bucket = 'Small' AND IsNewlyLocked = 0 AND OvSample IS NULL)  -- these ride ALL_INDEXES
-    GROUP BY IsNewlyLocked, EffectiveSample;
+    GROUP BY IsNewlyLocked, Bucket, EffectiveSample;
 
     --- The ALL_INDEXES Small-Normal pass: everything NOT swept becomes a "-" exclusion, so the sweep
     --- covers exactly the default-sample small tables. Emit only if at least one such table exists.
+    --- This pass serves the Small bucket and is not a forced pass.
     IF EXISTS (
         SELECT 1 FROM #Worklist
         WHERE Bucket = 'Small' AND IsNewlyLocked = 0 AND ISNULL(OvExclude, 0) = 0 AND OvSample IS NULL
@@ -746,8 +814,8 @@ BEGIN
            OR ISNULL(OvExclude, 0) = 1
            OR OvSample IS NOT NULL;
 
-        INSERT INTO @Passes (PassName, Indexes, SamplePercent, OnlyModified, ModLevel)
-        VALUES ('Small-Normal', @idx, @SmallTableSamplePercent, @normalOms, @normalSml);
+        INSERT INTO @Passes (PassName, Bucket, IsForced, Indexes, SamplePercent, OnlyModified, ModLevel)
+        VALUES ('Small-Normal', 'Small', 0, @idx, @SmallTableSamplePercent, @normalOms, @normalSml);
     END;
 
     -------------------------------------------------------------------------------------------
@@ -757,7 +825,9 @@ BEGIN
     DECLARE @logToTableYN char(1) = CASE WHEN @LogToTable = 1 THEN 'Y' ELSE 'N' END;
 
     DECLARE @passId       int,
-            @passName     varchar(20),
+            @passName     varchar(30),
+            @passBucket   varchar(6),
+            @passForced   bit,
             @passIndexes  nvarchar(max),
             @passSample   tinyint,
             @passOms      char(1),
@@ -774,12 +844,29 @@ BEGIN
     BEGIN
         SELECT
             @passName    = PassName,
+            @passBucket  = Bucket,
+            @passForced  = IsForced,
             @passIndexes = Indexes,
             @passSample  = SamplePercent,
             @passOms     = OnlyModified,
             @passSml     = ModLevel
         FROM @Passes
         WHERE PassId = @i;
+
+        -- @Buckets filter: run a pass only if its bucket is selected this run, OR it is a forced
+        -- (newly-locked) baseline pass. Forced passes ALWAYS run regardless of @Buckets -- a table we
+        -- just locked this run must get its baseline refresh or it would be left frozen; skipping it
+        -- for being "out of bucket scope" would reintroduce exactly the failure this framework prevents.
+        IF @passForced = 0 AND NOT EXISTS (SELECT 1 FROM @SelectedBuckets WHERE Bucket = @passBucket)
+        BEGIN
+            IF @Debug = 1
+            BEGIN
+                SET @msg = N'-- Pass: ' + @passName + N'  (SKIPPED: bucket ' + @passBucket + N' not in @Buckets)';
+                EXEC dbo.Debug_Print @DebugMessage = @msg;
+            END;
+            SET @i += 1;
+            CONTINUE;
+        END;
 
         IF @Debug = 1
         BEGIN
