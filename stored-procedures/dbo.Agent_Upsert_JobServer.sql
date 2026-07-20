@@ -44,7 +44,7 @@ BEGIN
         WHERE js.job_id = @job_id
           AND (
                 @server_name = N'(LOCAL)'
-             OR js.server_id = (SELECT server_id FROM msdb.dbo.sysservers WHERE [name] = @server_name)
+             OR js.server_id = (SELECT server_id FROM msdb.dbo.systargetservers_view WHERE server_name = @server_name)
           )
     )
     BEGIN
