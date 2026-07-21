@@ -72,7 +72,7 @@ BEGIN
             EXEC dbo.Debug_Print @DebugMessage = @pruneSql;
         END
         ELSE
-            EXEC sys.sp_executesql @pruneSql, N'@jid int', @jid = @job_id;
+            EXEC sys.sp_executesql @pruneSql, N'@jid UNIQUEIDENTIFIER', @jid = @job_id;
         END
 
 
