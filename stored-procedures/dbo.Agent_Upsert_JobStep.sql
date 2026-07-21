@@ -48,9 +48,39 @@ BEGIN
         THROW 50000, @msg, 1;
     END
 
+    CREATE TABLE #sysjobsteps
+    (
+        step_id              INT,
+        step_name            SYSNAME,
+        subsystem            NVARCHAR(40),
+        command              NVARCHAR(MAX),
+        flags                INT,
+        cmdexec_success_code INT,
+        on_success_action    TINYINT,
+        on_success_step_id   INT,
+        on_fail_action       TINYINT,
+        on_fail_step_id      INT,
+        server               NVARCHAR(128),
+        database_name        NVARCHAR(128),
+        database_user_name   NVARCHAR(128),
+        retry_attempts       INT,
+        retry_interval       INT,
+        os_run_priority      INT,
+        output_file_name     NVARCHAR(200),
+        last_run_outcome     INT,
+        last_run_duration    INT,
+        last_run_retries     INT,
+        last_run_date        INT,
+        last_run_time        INT,
+        proxy_id             INT
+    );
+
+    INSERT INTO #sysjobsteps
+    EXEC msdb.dbo.sp_help_jobstep @job_id = @job_id;
+
     IF NOT EXISTS (
-        SELECT 1 FROM msdb.dbo.sysjobsteps
-        WHERE job_id = @job_id AND step_id = @step_id
+        SELECT 1 FROM #sysjobsteps
+        WHERE step_id = @step_id
     )
     BEGIN
         EXEC msdb.dbo.sp_add_jobstep
