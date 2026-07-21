@@ -44,11 +44,36 @@ BEGIN
         THROW 50000, @msg, 1;
     END
 
+    CREATE TABLE #sysjobschedules
+    (
+        schedule_id            INT,
+        schedule_name          SYSNAME,
+        enabled                INT,
+        freq_type              INT,
+        freq_interval          INT,
+        freq_subday_type       INT,
+        freq_subday_interval   INT,
+        freq_relative_interval INT,
+        freq_recurrence_factor INT,
+        active_start_date      INT,
+        active_end_date        INT,
+        active_start_time      INT,
+        active_end_time        INT,
+        date_created           DATETIME,
+        schedule_description   NVARCHAR(4000),
+        next_run_date          INT,
+        next_run_time          INT,
+        schedule_uid           UNIQUEIDENTIFIER,
+        job_count              INT
+    );
+
+    INSERT INTO #sysjobschedules
+    EXEC msdb.dbo.sp_help_jobschedule @job_id = @job_id;
+
     IF NOT EXISTS (
         SELECT 1
-        FROM msdb.dbo.sysjobschedules js
-        JOIN msdb.dbo.sysschedules s ON s.schedule_id = js.schedule_id
-        WHERE js.job_id = @job_id AND s.[name] = @name
+        FROM #sysjobschedules js
+        WHERE js.schedule_name = @name
     )
     BEGIN
         EXEC msdb.dbo.sp_add_jobschedule
