@@ -31,6 +31,22 @@ EXAMPLES:
 BEGIN
     SET NOCOUNT ON;
 
+    /*
+        On RDS we need to do some special handling:
+            - the owner MUST be the creating user
+            - We can't use custom categories. We SKIP creating the category, so it's [Uncategorized (Local)]
+    */
+
+    IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'rdsadmin')
+    BEGIN
+        SET @owner_login_name = current_user;
+
+        IF NOT EXISTS (SELECT 1 FROM msdb.dbo.syscategories WHERE [name] = @category_name AND category_class = 1)
+        BEGIN
+            SET @category_name = '[Uncategorized (Local)]';
+        END;
+    END;
+
     IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE [name] = @job_name)
     BEGIN
         EXEC msdb.dbo.sp_add_job
@@ -44,14 +60,28 @@ BEGIN
     END
     ELSE
     BEGIN
-        EXEC msdb.dbo.sp_update_job
-            @job_name                   = @job_name,
-            @enabled                    = @enabled,
-            @description                = @description,
-            @category_name              = @category_name,
-            @owner_login_name           = @owner_login_name,
-            @notify_level_email         = @notify_level_email,
-            @notify_email_operator_name = @notify_email_operator_name;
+        IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'rdsadmin')
+        BEGIN
+            /* You can't update the owner & passing it on an update makes it fail. So we skip it on RDS. */
+            EXEC msdb.dbo.sp_update_job
+                    @job_name                   = @job_name,
+                    @enabled                    = @enabled,
+                    @description                = @description,
+                    @category_name              = @category_name,
+                    @notify_level_email         = @notify_level_email,
+                    @notify_email_operator_name = @notify_email_operator_name;
+            END
+        ELSE
+        BEGIN
+            EXEC msdb.dbo.sp_update_job
+                    @job_name                   = @job_name,
+                    @enabled                    = @enabled,
+                    @description                = @description,
+                    @category_name              = @category_name,
+                    @owner_login_name           = @owner_login_name,
+                    @notify_level_email         = @notify_level_email,
+                    @notify_email_operator_name = @notify_email_operator_name;
+        END
     END
 END
 GO
