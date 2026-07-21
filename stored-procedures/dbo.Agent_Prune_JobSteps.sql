@@ -63,7 +63,7 @@ BEGIN
             + N'EXEC msdb.dbo.sp_delete_jobstep @job_id = @jid, @step_id = ' + CONVERT(nvarchar(max),js.step_id) + N';'
             + NCHAR(13) + NCHAR(10)
     FROM #sysjobsteps AS js
-    WHERE js.step_id > 1;
+    WHERE js.step_id > @retain_step_number;
 
     IF (@pruneSql <> N'')
     BEGIN
@@ -72,7 +72,7 @@ BEGIN
             EXEC dbo.Debug_Print @DebugMessage = @pruneSql;
         END
         ELSE
-            EXEC sys.sp_executesql @pruneSql, N'@jn SYSNAME', @jid = @job_id;
+            EXEC sys.sp_executesql @pruneSql, N'@jid int', @jid = @job_id;
         END
 
 
