@@ -374,6 +374,7 @@ BEGIN
         HasUnlockedStat   bit          NOT NULL,    -- at least one stat with no_recompute = 0
         HasLockedStat     bit          NOT NULL,    -- at least one stat with no_recompute = 1 (already locked)
         IsMemoryOptimized bit          NOT NULL,
+        OldestStatsDate   datetime2(0) NULL,        -- MIN(last_updated) across the table's stats; NULL = never updated
         Bucket            varchar(6)   NULL,        -- Small / Medium / Large (after override + skew bump)
         IsSkewed          bit          NOT NULL DEFAULT (0),  -- bumped down a bucket this run
         IsLockCandidate   bit          NOT NULL DEFAULT (0),
@@ -405,12 +406,14 @@ BEGIN
         RowCount_Alloc    = ISNULL(tr.RowCount_Alloc, 0),
         HasUnlockedStat   = MAX(CASE WHEN st.no_recompute = 0 THEN 1 ELSE 0 END),
         HasLockedStat     = MAX(CASE WHEN st.no_recompute = 1 THEN 1 ELSE 0 END),
-        IsMemoryOptimized = ISNULL(MAX(CONVERT(int, t.is_memory_optimized)), 0)
+        IsMemoryOptimized = ISNULL(MAX(CONVERT(int, t.is_memory_optimized)), 0),
+        OldestStatsDate   = MIN(sp.last_updated)
     FROM sys.objects AS o
     JOIN sys.schemas AS sch
         ON sch.schema_id = o.schema_id
     JOIN sys.stats AS st
         ON st.object_id = o.object_id
+    OUTER APPLY sys.dm_db_stats_properties(st.object_id, st.stats_id) AS sp
     LEFT JOIN sys.tables AS t
         ON t.object_id = o.object_id
     LEFT JOIN TableRows AS tr
@@ -419,7 +422,7 @@ BEGIN
       AND o.type = ''U''
     GROUP BY sch.name, o.name, tr.RowCount_Alloc;';
 
-    INSERT INTO #Worklist (SchemaName, ObjectName, RowCount_Alloc, HasUnlockedStat, HasLockedStat, IsMemoryOptimized)
+    INSERT INTO #Worklist (SchemaName, ObjectName, RowCount_Alloc, HasUnlockedStat, HasLockedStat, IsMemoryOptimized, OldestStatsDate))
     EXEC @dbExec @stmt = @analyzeSql;
 
     IF NOT EXISTS (SELECT 1 FROM #Worklist)
@@ -789,7 +792,8 @@ BEGIN
                     + Bucket + '-' + CONVERT(varchar(10), EffectiveSample),
         Bucket   = Bucket,
         IsForced = IsNewlyLocked,
-        Indexes  = STRING_AGG(CONVERT(nvarchar(max), @dbQuoted + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'.%'), N','),
+        Indexes  = STRING_AGG(CONVERT(nvarchar(max), @dbQuoted + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'.%'), N',')
+                       WITHIN GROUP (ORDER BY CASE WHEN OldestStatsDate IS NULL THEN 0 ELSE 1 END, OldestStatsDate ASC),
         SamplePercent = EffectiveSample,
         OnlyModified  = CASE WHEN IsNewlyLocked = 1 THEN 'N' ELSE @normalOms END,
         ModLevel      = CASE WHEN IsNewlyLocked = 1 THEN NULL ELSE @normalSml END
