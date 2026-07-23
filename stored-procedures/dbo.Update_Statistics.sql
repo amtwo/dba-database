@@ -11,6 +11,7 @@ CREATE OR ALTER PROCEDURE dbo.Update_Statistics
     @DisableAutoStatsThreshold  bigint   = NULL,          -- rows >= this -> sp_autostats OFF; NULL = never lock
     @StatisticsModificationLevel int     = NULL,          -- passthrough to the normal pass; NULL = update if modified
     @LogToTable                 bit      = NULL,          -- log Ola commands to dbo.CommandLog
+    @TimeLimitInMinutes         int      = NULL,          -- per-database time budget in minutes; NULL = no limit
     @Debug                      bit      = 0              -- 1 = print everything we'd run, change nothing
 AS
 /*************************************************************************************************
@@ -45,6 +46,8 @@ PARAMETERS
 * All other parameters are identical to dbo.Update_StatisticsSingleDB and are passed through
   verbatim; NULL means "let the single-DB proc resolve it from dbo.Config." See that proc's header
   for the full description of each knob and the per-table override behavior.
+* @TimeLimitInMinutes - Passed through verbatim, so it is a PER-DATABASE budget: each database in
+  @DbList gets the full limit, not a share of one total across the list. NULL (default) = no limit.
 * @Debug - 1 prints the resolved database list and then calls each database with @Debug = 1 (so
            every sp_autostats and IndexOptimize call is printed), changing nothing.
 
@@ -321,6 +324,7 @@ BEGIN
                 @DisableAutoStatsThreshold   = @DisableAutoStatsThreshold,
                 @StatisticsModificationLevel = @StatisticsModificationLevel,
                 @LogToTable                  = @LogToTable,
+                @TimeLimitInMinutes          = @TimeLimitInMinutes,
                 @Debug                       = @Debug;
         END TRY
         BEGIN CATCH
