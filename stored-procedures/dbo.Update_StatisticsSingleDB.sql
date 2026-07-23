@@ -11,6 +11,7 @@ CREATE OR ALTER PROCEDURE dbo.Update_StatisticsSingleDB
     @DisableAutoStatsThreshold  bigint   = NULL,          -- rows >= this -> sp_autostats OFF; NULL = never lock
     @StatisticsModificationLevel int     = NULL,          -- passthrough to the normal pass; NULL = update if modified
     @LogToTable                 bit      = NULL,          -- log Ola commands to dbo.CommandLog
+    @TimeLimitInMinutes         int      = NULL,          -- stop starting new commands after this many minutes; NULL = no limit
     @Debug                      bit      = 0              -- 1 = print everything we'd run, change nothing
 AS
 /*************************************************************************************************
@@ -142,12 +143,17 @@ PARAMETERS
                                When supplied, the normal pass uses @OnlyModifiedStatistics='N'
                                because Ola forbids combining the two. The forced pass ignores this.
 * @LogToTable - 1 logs every Ola command to dbo.CommandLog (@LogToTable='Y').
+* @TimeLimitInMinutes - Wall-clock budget, in minutes, after which IndexOptimize starts no new
+                        commands (an in-flight command still finishes). Converted to seconds and
+                        passed to Ola's @TimeLimit. NULL (default) = no limit. The same budget is
+                        handed to each IndexOptimize pass; it is not divided across passes.
 * @Debug - 1 prints the worklist, the sp_autostats calls, and every IndexOptimize call, and
            changes nothing.
 
-  Every knob above except @DbName / @Buckets / @Debug defaults to NULL and is resolved from
-  dbo.Config (category 'StatisticsMaint') when not passed; an explicit value always wins. @Buckets
-  is a per-run scheduling control (which passes execute), not a Config-backed policy value.
+  Every knob above except @DbName / @Buckets / @TimeLimitInMinutes / @Debug defaults to NULL and is
+  resolved from dbo.Config (category 'StatisticsMaint') when not passed; an explicit value always
+  wins. @Buckets and @TimeLimitInMinutes are per-run scheduling controls (which passes execute, and
+  how long), not Config-backed policy values.
 
 EXAMPLES:
 -- Fully config-driven (the normal case -- the Agent job step is just this):
@@ -374,7 +380,6 @@ BEGIN
         HasUnlockedStat   bit          NOT NULL,    -- at least one stat with no_recompute = 0
         HasLockedStat     bit          NOT NULL,    -- at least one stat with no_recompute = 1 (already locked)
         IsMemoryOptimized bit          NOT NULL,
-        OldestStatsDate   datetime2(0) NULL,        -- MIN(last_updated) across the table's stats; NULL = never updated
         Bucket            varchar(6)   NULL,        -- Small / Medium / Large (after override + skew bump)
         IsSkewed          bit          NOT NULL DEFAULT (0),  -- bumped down a bucket this run
         IsLockCandidate   bit          NOT NULL DEFAULT (0),
@@ -406,14 +411,12 @@ BEGIN
         RowCount_Alloc    = ISNULL(tr.RowCount_Alloc, 0),
         HasUnlockedStat   = MAX(CASE WHEN st.no_recompute = 0 THEN 1 ELSE 0 END),
         HasLockedStat     = MAX(CASE WHEN st.no_recompute = 1 THEN 1 ELSE 0 END),
-        IsMemoryOptimized = ISNULL(MAX(CONVERT(int, t.is_memory_optimized)), 0),
-        OldestStatsDate   = MIN(sp.last_updated)
+        IsMemoryOptimized = ISNULL(MAX(CONVERT(int, t.is_memory_optimized)), 0)
     FROM sys.objects AS o
     JOIN sys.schemas AS sch
         ON sch.schema_id = o.schema_id
     JOIN sys.stats AS st
         ON st.object_id = o.object_id
-    OUTER APPLY sys.dm_db_stats_properties(st.object_id, st.stats_id) AS sp
     LEFT JOIN sys.tables AS t
         ON t.object_id = o.object_id
     LEFT JOIN TableRows AS tr
@@ -422,7 +425,7 @@ BEGIN
       AND o.type = ''U''
     GROUP BY sch.name, o.name, tr.RowCount_Alloc;';
 
-    INSERT INTO #Worklist (SchemaName, ObjectName, RowCount_Alloc, HasUnlockedStat, HasLockedStat, IsMemoryOptimized, OldestStatsDate))
+    INSERT INTO #Worklist (SchemaName, ObjectName, RowCount_Alloc, HasUnlockedStat, HasLockedStat, IsMemoryOptimized)
     EXEC @dbExec @stmt = @analyzeSql;
 
     IF NOT EXISTS (SELECT 1 FROM #Worklist)
@@ -792,8 +795,7 @@ BEGIN
                     + Bucket + '-' + CONVERT(varchar(10), EffectiveSample),
         Bucket   = Bucket,
         IsForced = IsNewlyLocked,
-        Indexes  = STRING_AGG(CONVERT(nvarchar(max), @dbQuoted + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'.%'), N',')
-                       WITHIN GROUP (ORDER BY CASE WHEN OldestStatsDate IS NULL THEN 0 ELSE 1 END, OldestStatsDate ASC),
+        Indexes  = STRING_AGG(CONVERT(nvarchar(max), @dbQuoted + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'.%'), N','),
         SamplePercent = EffectiveSample,
         OnlyModified  = CASE WHEN IsNewlyLocked = 1 THEN 'N' ELSE @normalOms END,
         ModLevel      = CASE WHEN IsNewlyLocked = 1 THEN NULL ELSE @normalSml END
@@ -883,6 +885,7 @@ BEGIN
                 + N'    @StatisticsSample = ' + CONVERT(nvarchar(10), @passSample) + N',' + NCHAR(13) + NCHAR(10)
                 + N'    @OnlyModifiedStatistics = ''' + @passOms + N''',' + NCHAR(13) + NCHAR(10)
                 + N'    @StatisticsModificationLevel = ' + ISNULL(CONVERT(nvarchar(10), @passSml), N'NULL') + N',' + NCHAR(13) + NCHAR(10)
+                + N'    @TimeLimit = ' + ISNULL(CONVERT(nvarchar(10), @TimeLimitInMinutes * 60), N'NULL') + N',' + NCHAR(13) + NCHAR(10)
                 + N'    @LogToTable = ''' + @logToTableYN + N''';';
             EXEC dbo.Debug_Print @DebugMessage = @msg;
         END;
@@ -898,6 +901,7 @@ BEGIN
                 @StatisticsSample            = @passSample,
                 @OnlyModifiedStatistics      = @passOms,
                 @StatisticsModificationLevel = @passSml,
+                @TimeLimit                   = @TimeLimitInMinutes * 60,
                 @LogToTable                  = @logToTableYN;
         END;
 
