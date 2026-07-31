@@ -9,6 +9,12 @@ RETURNS TABLE
 AUTHOR: Andy Mallon
 CREATED: 20151225
     Alternative to xp_sqlagent_enum_jobs. Use this TVF to determine a job's execution status
+    
+LIMITATIONS:
+    This function queries the underlying msdb tables directly. If you don't have permission to the
+    underlying msdb schema (ex, on AWS RDS), this will fail with permission errors. 
+    Use msdb.dbo.sp_help_job______ system stored procedures instead.
+    
 PARAMETERS:
     @JobName - Text string of a job's name (from msdb.dbo.sysjobs.name)
 EXAMPLES:
