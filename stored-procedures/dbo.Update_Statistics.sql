@@ -11,7 +11,7 @@ CREATE OR ALTER PROCEDURE dbo.Update_Statistics
     @DisableAutoStatsThreshold  bigint   = NULL,          -- rows >= this -> sp_autostats OFF; NULL = never lock
     @StatisticsModificationLevel int     = NULL,          -- passthrough to the normal pass; NULL = update if modified
     @LogToTable                 bit      = NULL,          -- log Ola commands to dbo.CommandLog
-    @TimeLimitInMinutes         int      = NULL,          -- per-database time budget in minutes; NULL = no limit
+    @TimeLimitInMinutes         int      = NULL,          -- whole-run time budget in minutes; NULL = no limit
     @Debug                      bit      = 0              -- 1 = print everything we'd run, change nothing
 AS
 /*************************************************************************************************
@@ -37,6 +37,12 @@ CREATED: 20260715
     tempdb and database snapshots are never included. A selected-but-inaccessible database is
     skipped with a printed note rather than erroring the whole run.
 
+    TIME BUDGET. @TimeLimitInMinutes is converted ONCE here into an absolute @StopAtTime deadline
+    and passed down as that datetime2. A deadline survives being handed around; a duration does not.
+    Every database and every IndexOptimize pass under it shares the one deadline, and each converts
+    it back to seconds-from-now immediately before calling Ola. So the budget covers the whole run:
+    ten databases with a 60-minute limit finish in 60 minutes, not 600.
+
     ERROR ISOLATION. Each database is run inside its own TRY/CATCH. If one database fails, the error
     is captured and the loop continues to the rest; after the loop, a summary error is raised listing
     every database that failed. One bad database never blocks maintenance on the others.
@@ -46,8 +52,9 @@ PARAMETERS
 * All other parameters are identical to dbo.Update_StatisticsSingleDB and are passed through
   verbatim; NULL means "let the single-DB proc resolve it from dbo.Config." See that proc's header
   for the full description of each knob and the per-table override behavior.
-* @TimeLimitInMinutes - Passed through verbatim, so it is a PER-DATABASE budget: each database in
-  @DbList gets the full limit, not a share of one total across the list. NULL (default) = no limit.
+* @TimeLimitInMinutes - Budget for the WHOLE RUN, not per database. Converted here, once, into a
+  @StopAtTime deadline that every database shares, so N minutes means the run is done in N minutes
+  no matter how many databases @DbList resolves to. NULL (default) = no limit. See TIME BUDGET.
 * @Debug - 1 prints the resolved database list and then calls each database with @Debug = 1 (so
            every sp_autostats and IndexOptimize call is printed), changing nothing.
 
@@ -72,6 +79,8 @@ MODIFICATIONS:
     20260715 - AM2 - Initial version. Multi-database wrapper over dbo.Update_StatisticsSingleDB;
                      borrows Ola IndexOptimize's @Databases selection grammar.
     20260716 - AM2 - Pass @Buckets through to the single-DB proc (run only selected size buckets).
+    20260803 - AM2 - Add @TimeLimitInMinutes, converted here once into a @StopAtTime deadline that is
+                     passed down as a datetime2. Budget is for the whole run, not per database.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -82,6 +91,10 @@ BEGIN
 
     DECLARE @StringDelimiter char(1) = N',',
             @Version         int;
+
+    -- Resolve the time budget to an absolute deadline ONCE, before any work: everything below
+    -- shares this instant, and each IndexOptimize call converts it back to seconds-from-now.
+    DECLARE @StopAtTime datetime2(0) = DATEADD(MINUTE, @TimeLimitInMinutes, SYSDATETIME());
     -- Major version number (e.g. 15 for SQL 2019); gates the availability-group lookups below.
     SET @Version = CAST(LEFT(CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128)),
                              CHARINDEX('.', CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128))) - 1) AS int);
@@ -92,6 +105,13 @@ BEGIN
     IF @DbList IS NULL OR LEN(LTRIM(RTRIM(@DbList))) = 0
     BEGIN
         RAISERROR('You must supply @DbList (Ola @Databases grammar, e.g. USER_DATABASES).', 16, 1);
+        RETURN;
+    END;
+
+    -- A negative budget would put @StopAtTime in the past, making the whole run a silent no-op.
+    IF @TimeLimitInMinutes < 0
+    BEGIN
+        RAISERROR('@TimeLimitInMinutes cannot be negative. Use NULL for no limit.', 16, 1);
         RETURN;
     END;
 
@@ -324,7 +344,7 @@ BEGIN
                 @DisableAutoStatsThreshold   = @DisableAutoStatsThreshold,
                 @StatisticsModificationLevel = @StatisticsModificationLevel,
                 @LogToTable                  = @LogToTable,
-                @TimeLimitInMinutes          = @TimeLimitInMinutes,
+                @StopAtTime                  = @StopAtTime,
                 @Debug                       = @Debug;
         END TRY
         BEGIN CATCH
