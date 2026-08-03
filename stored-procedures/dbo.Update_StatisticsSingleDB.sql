@@ -1,4 +1,9 @@
-CREATE OR ALTER PROCEDURE dbo.Update_StatisticsSingleDB
+-- don't lint 3rd party open source code.
+-- linting disabled based on filename prefix
+
+-- Source: https://am2.co/dbadb
+
+CREATE PROCEDURE dbo.Update_StatisticsSingleDB
     @DbName                     sysname,
     @MediumRowCountThreshold    bigint   = NULL,          -- rows >= this -> Medium bucket
     @LargeRowCountThreshold     bigint   = NULL,          -- rows >= this -> Large bucket
@@ -869,6 +874,9 @@ BEGIN
     -- fragmentation tiers NULL (statistics-only run -- no reorg/rebuild) and @UpdateStatistics='ALL'.
     -------------------------------------------------------------------------------------------
     DECLARE @logToTableYN char(1) = CASE WHEN @LogToTable = 1 THEN 'Y' ELSE 'N' END;
+    -- Ola's @TimeLimit is seconds. Precomputed here because T-SQL won't accept an expression as a
+    -- proc argument -- @TimeLimit = @TimeLimitInMinutes * 60 is a syntax error.
+    DECLARE @timeLimitSeconds int = @TimeLimitInMinutes * 60;
 
     DECLARE @passId       int,
             @passName     varchar(30),
@@ -925,7 +933,7 @@ BEGIN
                 + N'    @StatisticsSample = ' + CONVERT(nvarchar(10), @passSample) + N',' + NCHAR(13) + NCHAR(10)
                 + N'    @OnlyModifiedStatistics = ''' + @passOms + N''',' + NCHAR(13) + NCHAR(10)
                 + N'    @StatisticsModificationLevel = ' + ISNULL(CONVERT(nvarchar(10), @passSml), N'NULL') + N',' + NCHAR(13) + NCHAR(10)
-                + N'    @TimeLimit = ' + ISNULL(CONVERT(nvarchar(10), @TimeLimitInMinutes * 60), N'NULL') + N',' + NCHAR(13) + NCHAR(10)
+                + N'    @TimeLimit = ' + ISNULL(CONVERT(nvarchar(10), @timeLimitSeconds), N'NULL') + N',' + NCHAR(13) + NCHAR(10)
                 + N'    @LogToTable = ''' + @logToTableYN + N''';';
             EXEC dbo.Debug_Print @DebugMessage = @msg;
         END;
@@ -941,7 +949,7 @@ BEGIN
                 @StatisticsSample            = @passSample,
                 @OnlyModifiedStatistics      = @passOms,
                 @StatisticsModificationLevel = @passSml,
-                @TimeLimit                   = @TimeLimitInMinutes * 60,
+                @TimeLimit                   = @timeLimitSeconds,
                 @LogToTable                  = @logToTableYN;
         END;
 
