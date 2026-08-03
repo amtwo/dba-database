@@ -12,6 +12,9 @@ CREATED: 20260713
 
     This shows STATED intent. The fully rowcount-resolved picture (which bucket each table actually
     lands in, after skew) comes from EXEC dbo.Update_Statistics @Debug = 1.
+
+    OverrideBucket 'Exempt' is not a size: the table is managed out of band and completely ignored
+    when processing stats updates.
 **************************************************************************************************
 MODIFICATIONS:
     20260713 - AM2 - Initial version.
