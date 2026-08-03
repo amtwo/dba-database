@@ -1,9 +1,4 @@
--- don't lint 3rd party open source code.
--- linting disabled based on filename prefix
-
--- Source: https://am2.co/dbadb
-
-CREATE PROCEDURE dbo.Update_StatisticsSingleDB
+CREATE OR ALTER PROCEDURE dbo.Update_StatisticsSingleDB
     @DbName                     sysname,
     @MediumRowCountThreshold    bigint   = NULL,          -- rows >= this -> Medium bucket
     @LargeRowCountThreshold     bigint   = NULL,          -- rows >= this -> Large bucket
@@ -16,7 +11,7 @@ CREATE PROCEDURE dbo.Update_StatisticsSingleDB
     @DisableAutoStatsThreshold  bigint   = NULL,          -- rows >= this -> sp_autostats OFF; NULL = never lock
     @StatisticsModificationLevel int     = NULL,          -- passthrough to the normal pass; NULL = update if modified
     @LogToTable                 bit      = NULL,          -- log Ola commands to dbo.CommandLog
-    @TimeLimitInMinutes         int      = NULL,          -- stop starting new commands after this many minutes; NULL = no limit
+    @StopAtTime                 datetime2(0) = NULL,      -- absolute deadline: start no new command after this; NULL = no limit
     @Debug                      bit      = 0              -- 1 = print everything we'd run, change nothing
 AS
 /*************************************************************************************************
@@ -124,6 +119,16 @@ CREATED: 20260601
       frozen. (Corollary of the NORECOMPUTE promise, now per bucket: if you lock tables in a bucket,
       that bucket must stay on a schedule that runs often enough to keep them fresh.)
 
+    TIME BUDGET (@StopAtTime):
+    * A DEADLINE, not a duration. Ola's @TimeLimit is seconds counted from ITS OWN start, so it is
+      only meaningful relative to the moment that call begins. This proc makes several IndexOptimize
+      calls, each starting later than the last, so the seconds value is recomputed per pass as
+      DATEDIFF(SECOND, SYSDATETIME(), @StopAtTime). Passing one precomputed duration would give every
+      pass the full budget and blow the deadline by a multiple of it.
+    * Floored at 0, never negative: Ola raises an error on a negative @TimeLimit, and 0 correctly
+      means "start no new command."
+    * @Debug prints the seconds each pass would get, so the countdown across passes is visible.
+
     This is a GENERIC wrapper: all policy lives in dbo.Config data, not in the code. Stock
     IndexOptimize and dbo.Config_Get are dependencies. See the repo README.
 
@@ -162,16 +167,17 @@ PARAMETERS
                                When supplied, the normal pass uses @OnlyModifiedStatistics='N'
                                because Ola forbids combining the two. The forced pass ignores this.
 * @LogToTable - 1 logs every Ola command to dbo.CommandLog (@LogToTable='Y').
-* @TimeLimitInMinutes - Wall-clock budget, in minutes, after which IndexOptimize starts no new
-                        commands (an in-flight command still finishes). Converted to seconds and
-                        passed to Ola's @TimeLimit. NULL (default) = no limit. The same budget is
-                        handed to each IndexOptimize pass; it is not divided across passes.
+* @StopAtTime - Absolute deadline after which IndexOptimize starts no new command (an in-flight
+                command still finishes). NULL (default) = no limit. A DEADLINE, not a duration:
+                dbo.Update_Statistics converts its @TimeLimitInMinutes once and passes the instant
+                down, so every database and pass in a run shares it. Each pass converts it back to
+                seconds-from-now just before calling Ola -- see TIME BUDGET.
 * @Debug - 1 prints the worklist, the sp_autostats calls, and every IndexOptimize call, and
            changes nothing.
 
-  Every knob above except @DbName / @Buckets / @TimeLimitInMinutes / @Debug defaults to NULL and is
+  Every knob above except @DbName / @Buckets / @StopAtTime / @Debug defaults to NULL and is
   resolved from dbo.Config (category 'StatisticsMaint') when not passed; an explicit value always
-  wins. @Buckets and @TimeLimitInMinutes are per-run scheduling controls (which passes execute, and
+  wins. @Buckets and @StopAtTime are per-run scheduling controls (which passes execute, and
   how long), not Config-backed policy values.
 
 EXAMPLES:
@@ -215,6 +221,8 @@ MODIFICATIONS:
     20260803 - AM2 - Add the Exempt bucket: a per-table override value meaning "managed out of band,
                      leave entirely alone" -- no pass, no ALL_INDEXES sweep, no sp_autostats either
                      way. Not valid in @Buckets, and rejected alongside "sample"/"lock".
+    20260803 - AM2 - Add @StopAtTime: an absolute deadline, converted to Ola's seconds-based
+                     @TimeLimit per pass rather than once, since each pass starts at a different time.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -874,9 +882,11 @@ BEGIN
     -- fragmentation tiers NULL (statistics-only run -- no reorg/rebuild) and @UpdateStatistics='ALL'.
     -------------------------------------------------------------------------------------------
     DECLARE @logToTableYN char(1) = CASE WHEN @LogToTable = 1 THEN 'Y' ELSE 'N' END;
-    -- Ola's @TimeLimit is seconds. Precomputed here because T-SQL won't accept an expression as a
-    -- proc argument -- @TimeLimit = @TimeLimitInMinutes * 60 is a syntax error.
-    DECLARE @timeLimitSeconds int = @TimeLimitInMinutes * 60;
+
+    -- Recomputed per pass from @StopAtTime, NOT hoisted: Ola's @TimeLimit is seconds-from-ITS-own
+    -- start, so each pass needs the time remaining as of when that pass begins. One precomputed
+    -- value would hand every pass the full budget and overshoot the deadline by a multiple of it.
+    DECLARE @timeLimitSeconds int;
 
     DECLARE @passId       int,
             @passName     varchar(30),
@@ -921,6 +931,16 @@ BEGIN
             SET @i += 1;
             CONTINUE;
         END;
+
+        -- Time remaining as of THIS pass. Floored at 0 because Ola rejects a negative @TimeLimit;
+        -- 0 is legal and means "start nothing new," which is what an expired deadline should do.
+        SET @timeLimitSeconds = CASE
+                                  WHEN @StopAtTime IS NULL THEN NULL
+                                  ELSE CASE WHEN DATEDIFF(SECOND, SYSDATETIME(), @StopAtTime) < 0
+                                            THEN 0
+                                            ELSE DATEDIFF(SECOND, SYSDATETIME(), @StopAtTime)
+                                       END
+                                END;
 
         IF @Debug = 1
         BEGIN
