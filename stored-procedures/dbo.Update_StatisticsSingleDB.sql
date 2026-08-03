@@ -11,7 +11,6 @@ CREATE OR ALTER PROCEDURE dbo.Update_StatisticsSingleDB
     @DisableAutoStatsThreshold  bigint   = NULL,          -- rows >= this -> sp_autostats OFF; NULL = never lock
     @StatisticsModificationLevel int     = NULL,          -- passthrough to the normal pass; NULL = update if modified
     @LogToTable                 bit      = NULL,          -- log Ola commands to dbo.CommandLog
-    @TimeLimitInMinutes         int      = NULL,          -- stop starting new commands after this many minutes; NULL = no limit
     @Debug                      bit      = 0              -- 1 = print everything we'd run, change nothing
 AS
 /*************************************************************************************************
@@ -27,7 +26,8 @@ CREATED: 20260601
          Small / Medium / Large using two thresholds, and each bucket gets its own sample percent
          (100 = FULLSCAN). The premise: on big volatile tables, a weekly-ish high
          sample beats a fresh sub-1% auto-stats update, so we scan small tables fully and sample
-         the giants.
+         the giants. A fourth bucket, Exempt, is set only by per-table override and means "managed
+         out of band, don't touch" -- it is a status, not a size (see PER-TABLE OVERRIDES).
 
       2. AUTO-STATS LOCKING. Tables at/above @DisableAutoStatsThreshold get AUTO_UPDATE_STATISTICS
          turned OFF (via sys.sp_autostats), so a tiny-sample auto-update can't trample the
@@ -59,6 +59,7 @@ CREATED: 20260601
                            --   it can't end up locked AND unrefreshed = frozen)
          "sample": 1..100  -- force this table's sample percent, ignoring its bucket
          "bucket": "Small"|"Medium"|"Large"  -- force the bucket, ignoring row count (and skew)
+         "bucket": "Exempt" -- this proc does not manage this table AT ALL (see below)
          "lock": true|false -- force auto-stats OFF (true) or force-exempt (false), overriding the
                                per-server @DisableAutoStatsThreshold for this table
       An absent field means "no opinion, use the computed default." This replaces the hand-built
@@ -73,6 +74,9 @@ CREATED: 20260601
       entry match one table, the EXACT one wins for sample/bucket; exclude=true from ANY match wins.
       Two wildcards giving different sample/bucket for the same table with no exact tiebreak is an
       error, not a silent pick.
+    * THE Exempt BUCKET. "bucket": "Exempt" means this table is off the size scale entirely -- it is
+      managed by a purpose-built job OUT OF BAND, not by this framework. This proc does not know how
+      to process such a table and is not meant to: it simply leaves it completely alone. 
 
     HOW IT COOPERATES WITH IndexOptimize:
     * sp_autostats only flips the metadata flag; it runs no UPDATE STATISTICS. Ola then owns every
@@ -101,6 +105,8 @@ CREATED: 20260601
       controls which passes actually EXECUTE. Name a subset (e.g. 'Large') to update just those size
       buckets this run, so large tables can be scheduled on a slower cadence than small ones. Each
       pass is tied to one size bucket; a pass whose bucket is not selected is skipped.
+    * @Buckets accepts ONLY Small, Medium, and Large. Exempt is deliberately not a valid token: an
+      Exempt table never gets a pass to schedule; we promised to leave it to their own out-of-band job.
     * EXCEPTION: forced (newly-locked) passes always run regardless of @Buckets. A table locked this
       run must get its baseline refresh, so bucket scheduling can never leave a just-locked table
       frozen. (Corollary of the NORECOMPUTE promise, now per bucket: if you lock tables in a bucket,
@@ -127,6 +133,7 @@ PARAMETERS
              (case-insensitive). NULL or empty = all three (the normal case). Use a subset to run
              one size class on its own cadence, e.g. @Buckets = 'Large'. Forced refreshes of tables
              locked this run always execute regardless of @Buckets (see BUCKET SCHEDULING above).
+             'Exempt' is NOT accepted here -- those tables are managed out of band by design.
 * @SkewAnalysis - 1 reads histograms for Medium/Large tables and bumps any skewed table down one
                   bucket (Large->Medium, Medium->Small) so it gets the next-larger sample percent.
                   0 (default) skips the histogram read entirely. A table with an explicit bucket
@@ -143,17 +150,12 @@ PARAMETERS
                                When supplied, the normal pass uses @OnlyModifiedStatistics='N'
                                because Ola forbids combining the two. The forced pass ignores this.
 * @LogToTable - 1 logs every Ola command to dbo.CommandLog (@LogToTable='Y').
-* @TimeLimitInMinutes - Wall-clock budget, in minutes, after which IndexOptimize starts no new
-                        commands (an in-flight command still finishes). Converted to seconds and
-                        passed to Ola's @TimeLimit. NULL (default) = no limit. The same budget is
-                        handed to each IndexOptimize pass; it is not divided across passes.
 * @Debug - 1 prints the worklist, the sp_autostats calls, and every IndexOptimize call, and
            changes nothing.
 
-  Every knob above except @DbName / @Buckets / @TimeLimitInMinutes / @Debug defaults to NULL and is
-  resolved from dbo.Config (category 'StatisticsMaint') when not passed; an explicit value always
-  wins. @Buckets and @TimeLimitInMinutes are per-run scheduling controls (which passes execute, and
-  how long), not Config-backed policy values.
+  Every knob above except @DbName / @Buckets / @Debug defaults to NULL and is resolved from
+  dbo.Config (category 'StatisticsMaint') when not passed; an explicit value always wins. @Buckets
+  is a per-run scheduling control (which passes execute), not a Config-backed policy value.
 
 EXAMPLES:
 -- Fully config-driven (the normal case -- the Agent job step is just this):
@@ -193,6 +195,9 @@ MODIFICATIONS:
     20260716 - AM2 - Add @Buckets: run only selected size buckets (Small/Medium/Large) this run so a
                      size class can be scheduled on its own cadence. Passes now carry their bucket and
                      are filtered at execution; forced (newly-locked) passes always run.
+    20260803 - AM2 - Add the Exempt bucket: a per-table override value meaning "managed out of band,
+                     leave entirely alone" -- no pass, no ALL_INDEXES sweep, no sp_autostats either
+                     way. Not valid in @Buckets, and rejected alongside "sample"/"lock".
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -360,9 +365,16 @@ BEGIN
             RETURN;
         END;
 
-        IF EXISTS (SELECT 1 FROM #Overrides WHERE OvBucket IS NOT NULL AND OvBucket NOT IN ('Small', 'Medium', 'Large'))
+        IF EXISTS (SELECT 1 FROM #Overrides WHERE OvBucket IS NOT NULL AND OvBucket NOT IN ('Small', 'Medium', 'Large', 'Exempt'))
         BEGIN
-            RAISERROR('An override bucket must be Small, Medium, or Large.', 16, 1);
+            RAISERROR('An override bucket must be Small, Medium, Large, or Exempt.', 16, 1);
+            RETURN;
+        END;
+
+        -- Exempt means "this proc does not manage this table at all", 
+        IF EXISTS (SELECT 1 FROM #Overrides WHERE OvBucket = 'Exempt' AND (OvSample IS NOT NULL OR OvLock IS NOT NULL))
+        BEGIN
+            RAISERROR('An Exempt override cannot also set "sample" or "lock" -- an Exempt table is left entirely alone (its sample and auto-stats state belong to the out-of-band job that manages it).', 16, 1);
             RETURN;
         END;
     END;
@@ -557,6 +569,7 @@ BEGIN
     -- preconditions always hold -- we only lock a table that still has an auto-updating stat to
     -- lock, isn't memory-optimized (sp_autostats can't lock those), and isn't excluded from the run
     -- (locking a table we then never refresh would freeze its stats, the exact failure we prevent).
+    -- An Exempt table is never a lock candidate for that same reason: this proc never refreshes it.
     UPDATE #Worklist
     SET Bucket = COALESCE(
                     OvBucket,
@@ -569,6 +582,7 @@ BEGIN
                             WHEN HasUnlockedStat = 1
                                 AND IsMemoryOptimized = 0
                                 AND ISNULL(OvExclude, 0) = 0
+                                AND ISNULL(OvBucket, '') <> 'Exempt'
                                 AND (
                                         OvLock = 1                              -- forced on
                                      OR (OvLock IS NULL                         -- else threshold rule
@@ -643,15 +657,20 @@ BEGIN
     SET IsNewlyLocked = IsLockCandidate;
 
     -- Resolve the effective sample per table: an explicit per-table override wins, otherwise the
-    -- table rides its (post-override, post-skew) bucket's sample percent.
+    -- table rides its (post-override, post-skew) bucket's sample percent. Exempt is deliberately
+    -- left NULL rather than falling through to the Small sample: no pass ever runs for an Exempt
+    -- table, so there is no sample to state and NULL says exactly that in the @Debug output.
     UPDATE #Worklist
-    SET EffectiveSample = COALESCE(
-                            OvSample,
-                            CASE Bucket
-                                WHEN 'Large'  THEN @LargeTableSamplePercent
-                                WHEN 'Medium' THEN @MediumTableSamplePercent
-                                ELSE @SmallTableSamplePercent
-                            END);
+    SET EffectiveSample = CASE
+                            WHEN Bucket = 'Exempt' THEN NULL
+                            ELSE COALESCE(
+                                    OvSample,
+                                    CASE Bucket
+                                        WHEN 'Large'  THEN @LargeTableSamplePercent
+                                        WHEN 'Medium' THEN @MediumTableSamplePercent
+                                        ELSE @SmallTableSamplePercent
+                                    END)
+                          END;
 
     IF @Debug = 1
     BEGIN
@@ -715,6 +734,7 @@ BEGIN
         SELECT QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName)
         FROM #Worklist
         WHERE ISNULL(OvExclude, 0) = 1
+          AND ISNULL(OvBucket, '') <> 'Exempt'   -- Exempt outranks exclude: never touch auto-stats
           AND HasLockedStat = 1
           AND IsMemoryOptimized = 0
         ORDER BY RowCount_Alloc DESC;
@@ -754,8 +774,14 @@ BEGIN
     --
     -- A table is SWEPT by the single ALL_INDEXES pass (so we never enumerate the thousands of small
     -- tables) only when it rides the default Small sample: Small bucket, not newly locked, not
-    -- excluded, and no sample override. Everything else -- Medium/Large, newly locked, excluded, or
-    -- a Small table with its own sample -- is named explicitly (excluded tables only as a "-" token).
+    -- excluded, and no sample override. Everything else -- Medium/Large, Exempt, newly locked,
+    -- excluded, or a Small table with its own sample -- is named explicitly (excluded and Exempt
+    -- tables only as a "-" token).
+    --
+    -- NOTE the sweep is SUBTRACTIVE: it starts at ALL_INDEXES and removes named tables. So anything
+    -- that must NOT be touched has to appear in the "-" exclusion list below -- being absent from
+    -- the explicit-include passes is NOT enough to keep it out of the sweep. That is why Exempt is
+    -- listed there; omitting it would silently FULLSCAN the very tables we promised not to touch.
     -------------------------------------------------------------------------------------------
     DECLARE @normalOms char(1),
             @normalSml int;
@@ -801,6 +827,7 @@ BEGIN
         ModLevel      = CASE WHEN IsNewlyLocked = 1 THEN NULL ELSE @normalSml END
     FROM #Worklist
     WHERE ISNULL(OvExclude, 0) = 0                              -- excluded tables get no include pass
+      AND Bucket <> 'Exempt'                                    -- Exempt tables get no pass at all
       AND NOT (Bucket = 'Small' AND IsNewlyLocked = 0 AND OvSample IS NULL)  -- these ride ALL_INDEXES
     GROUP BY IsNewlyLocked, Bucket, EffectiveSample;
 
@@ -815,7 +842,7 @@ BEGIN
         SELECT @idx = N'ALL_INDEXES' +
             ISNULL(N',' + STRING_AGG(CONVERT(nvarchar(max), N'-' + @dbQuoted + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'.%'), N','), N'')
         FROM #Worklist
-        WHERE Bucket IN ('Medium', 'Large')
+        WHERE Bucket IN ('Medium', 'Large', 'Exempt')
            OR IsNewlyLocked = 1
            OR ISNULL(OvExclude, 0) = 1
            OR OvSample IS NOT NULL;
@@ -885,7 +912,6 @@ BEGIN
                 + N'    @StatisticsSample = ' + CONVERT(nvarchar(10), @passSample) + N',' + NCHAR(13) + NCHAR(10)
                 + N'    @OnlyModifiedStatistics = ''' + @passOms + N''',' + NCHAR(13) + NCHAR(10)
                 + N'    @StatisticsModificationLevel = ' + ISNULL(CONVERT(nvarchar(10), @passSml), N'NULL') + N',' + NCHAR(13) + NCHAR(10)
-                + N'    @TimeLimit = ' + ISNULL(CONVERT(nvarchar(10), @TimeLimitInMinutes * 60), N'NULL') + N',' + NCHAR(13) + NCHAR(10)
                 + N'    @LogToTable = ''' + @logToTableYN + N''';';
             EXEC dbo.Debug_Print @DebugMessage = @msg;
         END;
@@ -901,7 +927,6 @@ BEGIN
                 @StatisticsSample            = @passSample,
                 @OnlyModifiedStatistics      = @passOms,
                 @StatisticsModificationLevel = @passSml,
-                @TimeLimit                   = @TimeLimitInMinutes * 60,
                 @LogToTable                  = @logToTableYN;
         END;
 
