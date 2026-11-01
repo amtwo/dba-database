@@ -22,6 +22,26 @@ Quick heads-up on expectations: this is primarily *my* DBA toolbox (the README s
 
 There is no repository-wide automated test harness. Use the safest relevant checks available: review the diff, inspect dependencies and version requirements, and run static checks where available. Runtime behavior should be verified on an isolated development instance when one is available. Include a representative call and results for behavior changes; clearly label untested behavior and any environment limitations.
 
+### ARM64 SQL Edge smoke testing
+
+Assume most Windows contributors will use a local SQL Server Developer Edition installation for runtime testing. Contributors on macOS or Windows on ARM can use Docker with Azure SQL Edge for a limited functional smoke test if its image is available. Azure SQL Edge was retired on September 30, 2025 ([Microsoft lifecycle notice](https://learn.microsoft.com/en-us/lifecycle/products/azure-sql-edge)) and is not a supported substitute for SQL Server. Use it only to check basic deployment and behavior; report the edition and its limitations with the test results.
+
+Run it as a disposable, localhost-only container with no persistent volume:
+
+```powershell
+docker run --name dba-sql-edge-smoke `
+    -e ACCEPT_EULA=1 `
+    -e MSSQL_SA_PASSWORD='Replace_With_A_Strong_Password1!' `
+    -p 127.0.0.1:14339:1433 `
+    -d mcr.microsoft.com/azure-sql-edge:latest
+
+docker logs -f dba-sql-edge-smoke
+```
+
+Wait for the server to report that it is ready, then connect from the host to `localhost,14339`. Use a disposable database, enable the features required by the scripts, and deploy only the reviewed scripts needed for the test. Do not use the repository installer as a shortcut: it installs the repository's full set of objects and dependencies. Remove the disposable container after testing with `docker rm -f dba-sql-edge-smoke`.
+
+Passing on SQL Edge does not establish compatibility with SQL Server. Record any untested wrapper, dependency, or engine-specific behavior separately, and repeat relevant runtime checks on a supported SQL Server version before treating them as verified.
+
 Automated coding agents follow this document for code conventions and [AGENTS.md](AGENTS.md) for repository-specific workflow and operational safety. Neither document authorizes deployment or external actions.
 
 ---
