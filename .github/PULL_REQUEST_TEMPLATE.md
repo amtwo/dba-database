@@ -11,17 +11,20 @@ If you haven't already, skim CONTRIBUTING.md — especially the coding conventio
 
 <!-- Link the related issue when available. See CONTRIBUTING.md for the issue-first workflow. -->
 
-## Coding agent disclosure
+## Coding agent & Review agent disclosure
 
-AI coding agents are allowed for code contributions. To help me evaluate your PR, please identify any agent used to write or modify code, including its provider, model, and reasoning effort when available. This information is context for review, not a measure of capability. If a detail is not exposed, say so rather than guessing; if no AI coding agent was used, say so.
+* AI coding agents are allowed for code contributions. 
+* AI coding agents are **encouraged** for adversarial reviews prior to PR submission. 
 
+To help me evaluate your PR, please identify any agent used to write or modify code, including its provider, model, and reasoning effort when available. This information is context for review, not a measure of capability. If a detail is not exposed, say so rather than guessing; if no AI coding agent was used, say so.
+
+### Coding agent details:
+<!-- Summarize AI Agent(s) used for coding -->
 * **Coding agent(s), provider/model, and reasoning effort (if applicable):**
 
-## Adversarial review
 
+### Adversarial review details
 <!-- Summarize the adversarial review, identify whether it used a separate reviewer or a fresh self-review pass, and explain how actionable findings were handled. -->
-
-Using an AI coding agent to perform an adversarial review of your PR is encouraged. To help me evaluate your PR, please identify any agent used for the adversarial review, including its provider, model, and reasoning effort when available. This information is context for review, not a measure of capability. If a detail is not exposed, say so rather than guessing; if no AI agent was used for the adversarial review, say so.
 
 * **Adversarial review agent(s), provider/model, and reasoning effort (if applicable):**
 * **Reviewer/review approach and summary:**
