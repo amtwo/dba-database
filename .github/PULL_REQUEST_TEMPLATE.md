@@ -9,15 +9,16 @@ If you haven't already, skim CONTRIBUTING.md — especially the coding conventio
 
 ## Related issue
 
-<!-- Link the issue you opened first. "Closes #123". If there isn't one, why not? (See CONTRIBUTING.md — issue-first is the norm here.) -->
+<!-- Link the related issue when available. See CONTRIBUTING.md for the issue-first workflow. -->
 
 ## How did you test it?
 
-<!-- There's no automated test suite, so this is what sells the PR. -->
+<!-- List checks that were actually performed; distinguish static checks from runtime testing. -->
 
-* **SQL Server version / edition tested against:**
-* **Installed cleanly via `Install-LatestDbaDatabase.ps1` (and a second time, to confirm it's idempotent):** [ ] yes
-* **Before/after output, or a sample call + result:**
+* **Checks performed:**
+* **SQL Server version / edition and isolated environment tested (if applicable):**
+* **Runtime verification not performed / limitations (if applicable):**
+* **Sample call and result (for behavior changes):**
 
 ```
 -- paste the EXEC and what it returned here
@@ -28,4 +29,4 @@ If you haven't already, skim CONTRIBUTING.md — especially the coding conventio
 * [ ] Follows the conventions in [CONTRIBUTING.md](../CONTRIBUTING.md) (naming, header comment block, `CREATE OR ALTER`, lowercase data types, etc.)
 * [ ] One object per file, filename matches the object name
 * [ ] The header comment block is filled in (description, parameters, examples, modifications)
-* [ ] Re-running the script is safe (idempotent)
+* [ ] Re-running behavior was checked in an isolated development environment, or runtime verification is identified as not performed
