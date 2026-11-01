@@ -11,6 +11,31 @@ If you haven't already, skim CONTRIBUTING.md — especially the coding conventio
 
 <!-- Link the related issue when available. See CONTRIBUTING.md for the issue-first workflow. -->
 
+## Coding agent & Review agent disclosure
+
+* AI coding agents are allowed for code contributions.
+* AI coding agents are **encouraged** for adversarial reviews prior to PR submission.
+
+To help me evaluate your PR, please identify any agent used to write or modify code, including its provider, model, and reasoning effort when available. This information is context for review, not a measure of capability. Agents may not be able to fill this in themselves, humans can optionally complete the section; neither humans nor Agents should ever guess about answers.
+
+### Coding agent details:
+<!-- Summarize AI Agent(s) used for coding -->
+* [ ] This PR was authored exclusively by humans
+
+* **Coding agent(s), provider/model, and reasoning effort (if applicable):**
+* [ ] Agent details unavailable to the submitter
+
+### Adversarial review details
+<!-- Summarize the adversarial review, identify whether it used a separate reviewer or a fresh self-review pass, and explain how actionable findings were handled. -->
+* [ ] An AI Agent has not performed adversarial review on this PR
+
+* **Adversarial review agent(s), provider/model, and reasoning effort (if applicable):**
+* [ ] Agent details unavailable to the submitter
+* **Reviewer/review approach and summary:**
+* **Findings resolved or left open (with reason):**
+* [ ] Review had zero findings
+* [ ] All findings were reconciled with high confidence
+
 ## How did you test it?
 
 <!-- List checks that were actually performed; distinguish static checks from runtime testing. -->
