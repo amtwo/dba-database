@@ -18,5 +18,19 @@
 
 ## Contribution workflow
 
+### Adversarial review
+
+- Before opening or updating any pull request, request a subagent to adversarially review the complete proposed diff. Resolve every finding before the pull request is ready; if you cannot resolve one with high confidence, ask the user before proceeding.
+- Require a substantive review: inspect every changed file and the relevant callers, dependencies, version requirements, install behavior, and failure paths. Check realistic edge cases and operational effects instead of relying on names or comments alone.
+- Ask the reviewer to report severity, exact file/line evidence, the failure scenario and impact, and a safe remediation direction. Require an explicit statement that the full diff was reviewed, including when no further findings remain.
+- The agent responding to the review must only implement a finding when it has high confidence in the fix and can explain the evidence. If confidence is not high, it must ask the user before changing behavior; it must not guess or silently waive the finding.
+
+### Agent-assisted pull request disclosure
+
+- For every pull request made with agentic assistance, include a concise AI-assistance disclosure in the pull request description with the tool/agent, provider and exact model identifier, reasoning effort, and role (authoring, review, or both). Identify the coding model separately from any review model when they differ.
+- Do not infer model or effort metadata. If the exact identifier or effort is not exposed, state that it was unavailable or unset instead of guessing; missing metadata does not block the pull request.
+- Treat model and effort as context, not as a measure of code quality. Merge decisions still require review of the changes and their validation evidence.
+- Suggested format: `AI assistance: [tool/agent]; coding model: [provider + identifier or unavailable]; effort: [setting or unavailable]; role: [authoring/review/both]. Reviewer: [tool/agent and model, if different or available].`
+
 - Follow the issue-first and pull request process in [CONTRIBUTING.md](CONTRIBUTING.md). Do not create issues, comments, branches, or pull requests unless the user asks you to.
 - Do not commit or push unless explicitly requested.
