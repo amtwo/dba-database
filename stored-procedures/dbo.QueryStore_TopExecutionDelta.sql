@@ -128,6 +128,7 @@ IF @Debug = 1
     PRINT @Sql;
 
 DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
+DECLARE @RestoreLockTimeout nvarchar(50) = N'SET LOCK_TIMEOUT ' + CONVERT(nvarchar(12), @PreviousLockTimeout);
 BEGIN TRY
     EXEC @Exec @Sql,
         N'@WindowStart datetimeoffset(7), @WindowEnd datetimeoffset(7), @BaseStart datetimeoffset(7), @BaseEnd datetimeoffset(7), @Top int',
@@ -138,8 +139,8 @@ BEGIN TRY
         @Top         = @Top;
 END TRY
 BEGIN CATCH
-    SET LOCK_TIMEOUT @PreviousLockTimeout;
+    EXEC (@RestoreLockTimeout);
     THROW;
 END CATCH;
-SET LOCK_TIMEOUT @PreviousLockTimeout;
+EXEC (@RestoreLockTimeout);
 GO

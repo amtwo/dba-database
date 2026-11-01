@@ -233,6 +233,7 @@ IF @Debug = 1
     PRINT @Sql;
 
 DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
+DECLARE @RestoreLockTimeout nvarchar(50) = N'SET LOCK_TIMEOUT ' + CONVERT(nvarchar(12), @PreviousLockTimeout);
 BEGIN TRY
     EXEC @Exec @Sql,
         N'@DatabaseName sysname, @UtilityDatabase sysname, @VariantSince datetimeoffset(7), @WindowEnd datetimeoffset(7), @BaselineStart datetimeoffset(7), @BaselineEnd datetimeoffset(7), @MinExecs bigint, @MinRatio decimal(9, 2), @MinCpuMs decimal(9, 2), @NormalizeLineEndings bit, @IgnoreAllWhiteSpace bit, @IgnoreCapitalization bit',
@@ -250,8 +251,8 @@ BEGIN TRY
         @IgnoreCapitalization = @IgnoreCapitalization;
 END TRY
 BEGIN CATCH
-    SET LOCK_TIMEOUT @PreviousLockTimeout;
+    EXEC (@RestoreLockTimeout);
     THROW;
 END CATCH;
-SET LOCK_TIMEOUT @PreviousLockTimeout;
+EXEC (@RestoreLockTimeout);
 GO

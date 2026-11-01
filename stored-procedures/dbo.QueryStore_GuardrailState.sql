@@ -189,6 +189,7 @@ IF @Debug = 1
     PRINT @Sql;
 
 DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
+DECLARE @RestoreLockTimeout nvarchar(50) = N'SET LOCK_TIMEOUT ' + CONVERT(nvarchar(12), @PreviousLockTimeout);
 BEGIN TRY
     EXEC @Exec @Sql,
         N'@DatabaseName sysname, @UtilityDatabase sysname, @QueryHashes nvarchar(max), @ActiveDays int',
@@ -198,8 +199,8 @@ BEGIN TRY
         @ActiveDays  = @ActiveDays;
 END TRY
 BEGIN CATCH
-    SET LOCK_TIMEOUT @PreviousLockTimeout;
+    EXEC (@RestoreLockTimeout);
     THROW;
 END CATCH;
-SET LOCK_TIMEOUT @PreviousLockTimeout;
+EXEC (@RestoreLockTimeout);
 GO
