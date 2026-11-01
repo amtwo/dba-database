@@ -16,7 +16,7 @@ If you take one thing away: write it so the next person (often me, 18 months lat
 Quick heads-up on expectations: this is primarily *my* DBA toolbox (the README says as much). I'm happy to take contributions, but the bar is "would I run this on my own servers at 2am," so let's talk before you build.
 
 1. **Open an issue first.** Describe the bug or the thing you want to add before you write a pile of code. Saves us both the heartbreak of a PR I can't take. [File one here.](https://github.com/amtwo/dba-database/issues/new/choose)
-2. **Fork, then branch.** Don't work on `production` directly. Name the branch for what it does.
+2. **Fork, then branch.** Don't work on `main` or `production` directly. Name the branch for what it does. Open new pull requests against `main`; `production` is maintained as a compatibility mirror.
 3. **Make it install cleanly.** Before you open the PR, run `Install-LatestDbaDatabase.ps1` against a real SQL Server instance (see the [README](README.md#to-install) for how). Then run it *again* — everything in this repo is idempotent, and a second install must succeed without errors. That's the closest thing to a test suite we've got, so it's the bar.
 4. **Open the PR.** [CODEOWNERS](CODEOWNERS) routes review to me automatically. Tell me what you tested it against (version, edition) in the description.
 

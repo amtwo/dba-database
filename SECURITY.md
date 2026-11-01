@@ -18,4 +18,4 @@ This is a collection of DBA utility scripts meant to run on servers *you* alread
 
 ## Supported versions
 
-This is a personal toolbox, not enterprise software — I patch forward, on the current code in the `production` branch. If you're on an old release and hit something, the fix will land on the latest version, not as a backport.
+This is a personal toolbox, not enterprise software — I patch forward, on the current code in the `main` branch. The `production` branch is maintained as a compatibility mirror. If you're on an old release and hit something, the fix will land on the latest version, not as a backport.

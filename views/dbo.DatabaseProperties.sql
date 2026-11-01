@@ -19,7 +19,7 @@ CREATED: 2021130
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
-    https://github.com/amtwo/dba-database/blob/production/LICENSE
+    https://github.com/amtwo/dba-database/blob/main/LICENSE
     ©2014-2022 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 AS
