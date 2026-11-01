@@ -17,6 +17,7 @@ SELECT @DisplayNameNullable = is_nullable
 FROM sys.columns
 WHERE object_id = OBJECT_ID(N'dbo.TimeZones')
     AND name = N'DisplayName'
+    AND user_type_id = system_type_id
     AND (
         (system_type_id IN (231, 239) AND max_length BETWEEN 1 AND 255)
         OR (system_type_id IN (167, 175) AND max_length BETWEEN 1 AND 127)
