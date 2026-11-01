@@ -118,6 +118,15 @@ You'll see this everywhere in the back catalog. **Don't copy it into new files**
 
 **Everything must be idempotent.** Run the installer twice, get the same result. Tables use `IF NOT EXISTS` create plus conditional `ALTER`s; data seeds use `IF NOT EXISTS` guards (see `dbo.Config.sql`); modules use `CREATE OR ALTER`. No file should ever error because it was already run once.
 
+### Evolving existing schemas
+
+A change inside an `IF NOT EXISTS` create block affects new installations only. If a schema fix must repair existing installations, add a rerunnable conditional `ALTER` to the same table script. The installer executes table scripts before loading dependent data.
+
+- Preserve existing data and nullability. Do not reduce a wider custom column definition to the new default size; widen or convert the type without losing its existing capacity.
+- Check dependent imports, views, procedures, parameters, and temporary or staging tables for independent width limits. Update only the definitions that also constrain the affected value.
+- Skip migration work when the existing definition already meets or exceeds the target, and verify that rerunning the script is safe.
+
+
 ---
 
 ## The header comment block
