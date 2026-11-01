@@ -5,12 +5,12 @@ CREATE OR ALTER  PROCEDURE dbo.Check_QueryStoreRegressedQueries
     @DbExcludePattern   nvarchar(300)       = NULL,
     @DbExcludeList      nvarchar(max)       = NULL,
     --These are the params that control the data returned from Query Stor
-    @results_row_count	int					= 25,
-    @recent_start_time	datetimeoffset(7)	= NULL,
-    @recent_end_time	datetimeoffset(7)	= NULL,
-    @history_start_time datetimeoffset(7)	= NULL,
-    @history_end_time	datetimeoffset(7)	= NULL,
-    @min_exec_count		bigint				= 2,
+    @results_row_count  int                 = 25,
+    @recent_start_time  datetimeoffset(7)   = NULL,
+    @recent_end_time    datetimeoffset(7)   = NULL,
+    @history_start_time datetimeoffset(7)   = NULL,
+    @history_end_time   datetimeoffset(7)   = NULL,
+    @min_exec_count     bigint              = 2,
     -- AM2 special sauce
     @Debug              bit                 = 0
 AS
@@ -18,40 +18,40 @@ BEGIN
     SET NOCOUNT ON;
         --
     SELECT 
-        @recent_start_time	= COALESCE(@recent_start_time	,DATEADD(HOUR,-2,GETDATE())),
-        @recent_end_time	= COALESCE(@recent_end_time	,GETDATE()),
-        @history_start_time	= COALESCE(@history_start_time	,DATEADD(DAY,-7,GETDATE())),
-        @history_end_time	= COALESCE(@history_end_time	,GETDATE());
+        @recent_start_time  = COALESCE(@recent_start_time   ,DATEADD(HOUR,-2,GETDATE())),
+        @recent_end_time    = COALESCE(@recent_end_time ,GETDATE()),
+        @history_start_time = COALESCE(@history_start_time  ,DATEADD(DAY,-7,GETDATE())),
+        @history_end_time   = COALESCE(@history_end_time    ,GETDATE());
 
     IF @Debug = 1
     BEGIN
         SELECT
-            ResultsRowCount		= @results_row_count ,
-            RecentStartTime		= @recent_start_time ,
-            RecentEndTime		= @recent_end_time   ,
-            BaselineStartTime	= @history_start_time,
-            BaselineEndTime		= @history_end_time	 ,
-            MinExecCount		= @min_exec_count	 ;
+            ResultsRowCount     = @results_row_count ,
+            RecentStartTime     = @recent_start_time ,
+            RecentEndTime       = @recent_end_time   ,
+            BaselineStartTime   = @history_start_time,
+            BaselineEndTime     = @history_end_time  ,
+            MinExecCount        = @min_exec_count    ;
     END;
 
     DECLARE @CheckSql nvarchar(max);
 
     SET @CheckSql = N'
     DECLARE
-        @results_row_count	int					,
-        @recent_start_time	datetimeoffset(7)	,
-        @recent_end_time	datetimeoffset(7)	,
-        @history_start_time datetimeoffset(7)	,
-        @history_end_time	datetimeoffset(7)	,
-        @min_exec_count		bigint				;
+        @results_row_count  int                 ,
+        @recent_start_time  datetimeoffset(7)   ,
+        @recent_end_time    datetimeoffset(7)   ,
+        @history_start_time datetimeoffset(7)   ,
+        @history_end_time   datetimeoffset(7)   ,
+        @min_exec_count     bigint              ;
 
     SELECT
-        @results_row_count	= ' + CONVERT(nvarchar(10),@results_row_count) + N',
-        @recent_start_time	= ' + QUOTENAME(CONVERT(nvarchar(35),@recent_start_time)  , CHAR(39))+ N',
-        @recent_end_time	= ' + QUOTENAME(CONVERT(nvarchar(35),@recent_end_time)    , CHAR(39))+ N',
+        @results_row_count  = ' + CONVERT(nvarchar(10),@results_row_count) + N',
+        @recent_start_time  = ' + QUOTENAME(CONVERT(nvarchar(35),@recent_start_time)  , CHAR(39))+ N',
+        @recent_end_time    = ' + QUOTENAME(CONVERT(nvarchar(35),@recent_end_time)    , CHAR(39))+ N',
         @history_start_time = ' + QUOTENAME(CONVERT(nvarchar(35),@history_start_time) , CHAR(39))+ N',
-        @history_end_time	= ' + QUOTENAME(CONVERT(nvarchar(35),@history_end_time)   , CHAR(39))+ N',
-        @min_exec_count		= ' + CONVERT(nvarchar(10),@min_exec_count) + N';
+        @history_end_time   = ' + QUOTENAME(CONVERT(nvarchar(35),@history_end_time)   , CHAR(39))+ N',
+        @min_exec_count     = ' + CONVERT(nvarchar(10),@min_exec_count) + N';
 
     WITH   hist AS  (
         SELECT

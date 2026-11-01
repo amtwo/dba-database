@@ -69,7 +69,7 @@ FROM (
         ('IsExternalAuthenticationOnly'    , SERVERPROPERTY('IsExternalAuthenticationOnly')    ,
             'Azure SQLDB & MI only; Returns whether Azure AD-only authentication is enabled.'),
         ('IsFullTextInstalled'             , SERVERPROPERTY('IsFullTextInstalled')             ,
-            '	The full-text and semantic indexing components are installed on the current instance of SQL Server.'),
+            CHAR(9) + 'The full-text and semantic indexing components are installed on the current instance of SQL Server.'),
         ('IsHadrEnabled'                   , SERVERPROPERTY('IsHadrEnabled')                   ,
             '2012+; Always On availability groups is enabled on this server instance.'),
         ('IsIntegratedSecurityOnly'        , SERVERPROPERTY('IsIntegratedSecurityOnly')        ,

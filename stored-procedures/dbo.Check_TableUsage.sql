@@ -4,7 +4,7 @@ GO
 
 
 ALTER PROCEDURE dbo.Check_TableUsage
-	@DbName sysname,
+    @DbName sysname,
     @SchemaName sysname,
     @TableName sysname
 AS
