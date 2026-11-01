@@ -20,11 +20,14 @@ To help me evaluate your PR, please identify any agent used to write or modify c
 
 ### Coding agent details:
 <!-- Summarize AI Agent(s) used for coding -->
+* [ ] No Coding agent was used
+
 * **Coding agent(s), provider/model, and reasoning effort (if applicable):**
 
 
 ### Adversarial review details
 <!-- Summarize the adversarial review, identify whether it used a separate reviewer or a fresh self-review pass, and explain how actionable findings were handled. -->
+* [ ] No Coding agent was used
 
 * **Adversarial review agent(s), provider/model, and reasoning effort (if applicable):**
 * **Reviewer/review approach and summary:**
