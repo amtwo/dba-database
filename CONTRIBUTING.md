@@ -16,11 +16,13 @@ If you take one thing away: write it so the next person (often me, 18 months lat
 Quick heads-up on expectations: this is primarily *my* DBA toolbox (the README says as much). I'm happy to take contributions, but the bar is "would I run this on my own servers at 2am," so let's talk before you build.
 
 1. **Open an issue first.** Describe the bug or the thing you want to add before you write a pile of code. Saves us both the heartbreak of a PR I can't take. [File one here.](https://github.com/amtwo/dba-database/issues/new/choose)
-2. **Fork, then branch.** Don't work on `main` or `production` directly. Name the branch for what it does. Open new pull requests against `main`; `production` is maintained as a compatibility mirror.
-3. **Make it install cleanly.** Before you open the PR, run `Install-LatestDbaDatabase.ps1` against a real SQL Server instance (see the [README](README.md#to-install) for how). Then run it *again* — everything in this repo is idempotent, and a second install must succeed without errors. That's the closest thing to a test suite we've got, so it's the bar.
+2. **Fork, then branch.** Do not work on `main` or `production` directly. Name the branch for what it does. Open pull requests against `main`; `production` is maintained as a compatibility mirror.
+3. **Verify safely.** Do not run the installer against production or an instance containing data or objects you need to preserve. If runtime installation testing is needed and available, use a disposable or designated development instance, review the scripts and installer parameters first, and report the SQL Server version/edition and exact scope tested. Running an installer twice can help check repeatability, but do so only in that isolated environment. If no suitable instance is available, say so; do not imply runtime validation was performed.
 4. **Open the PR.** [CODEOWNERS](CODEOWNERS) routes review to me automatically. Tell me what you tested it against (version, edition) in the description.
 
-There's no automated test harness. Verification is "run the object against a real instance and confirm it does what its header comment says it does." If you changed a proc, paste a before/after of the output in the PR — that's what sells it.
+There is no repository-wide automated test harness. Use the safest relevant checks available: review the diff, inspect dependencies and version requirements, and run static checks where available. Runtime behavior should be verified on an isolated development instance when one is available. Include a representative call and results for behavior changes; clearly label untested behavior and any environment limitations.
+
+Automated coding agents follow this document for code conventions and [AGENTS.md](AGENTS.md) for repository-specific workflow and operational safety. Neither document authorizes deployment or external actions.
 
 ---
 

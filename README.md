@@ -7,16 +7,18 @@ Some of this code was never intended to be used by anyone else--it's primarily h
 Some of this code (including the installer!) assumes that the First Responder Kit (firstresponderkit.org) and Ola Hallengren's SQL Server Maintenance Solution (ola.hallengren.com) are installed in the same database as well. PowerShell script provided to pull that stuff from it's respective download location. Redistributing other people's code isn't my thing.
 
 ### Prerequisites
-* **SQL Server 2016 or later.** A lot of the code uses `CREATE OR ALTER`, so older versions won't install cleanly.
+* **SQL Server 2016 SP1 or later** is the technical baseline for `CREATE OR ALTER`; individual objects may require newer features or third-party projects. For supported deployments, use a SQL Server release that Microsoft currently supports (SQL Server 2017 and later as of November 2026).
 * **PowerShell with the `SqlServer` module** (the installer leans on `Invoke-Sqlcmd` and `Write-SqlTableData`).
 * Permission to create a database on the target instance (or a database that already exists for you to install into).
 
-### Supported SQL Server versions:
-* My goal is to support all versions of SQL Server that are currently supported by Microsoft. (2017+ as of 2026)
-* Many scripts work on versions as old as SQL Server 2005, as they were written when 2005 was still a supported version. New work is not tested on older, unsupported versions. 
+### SQL Server compatibility
+* The goal is to support SQL Server versions still supported by Microsoft. Each script can have additional version or feature requirements; check its header and test it against the target version.
+* Many legacy scripts may run on older versions, including SQL Server 2005, but those versions are unsupported and new changes are not tested against them.
 
 ### To install
 By default, the installer will create a database named `DBA` (if it doesn't already exist), and install all objects in that `DBA` database. You can deploy to a database named something other than `DBA` by using the `-DatabaseName` parameter on the install script. This install script assumes that you have permission to create the database, or that it already exists. 
+
+The installer creates and alters database objects, and installs some third-party tools into the target database or `master`. Review the scripts and use a development or otherwise isolated instance when evaluating the project; do not point the installer at production as a test.
 
 * Clone this repo.
 * Open a PowerShell prompt & navigate (ie `Set-Location`) to the `dba-database` folder you just cloned.
