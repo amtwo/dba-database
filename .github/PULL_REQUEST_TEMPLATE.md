@@ -23,14 +23,14 @@ To help me evaluate your PR, please identify any agent used to write or modify c
 * [ ] This PR was authored exclusively by humans
 
 * **Coding agent(s), provider/model, and reasoning effort (if applicable):**
-* [ ] Coding agent(s) used; details not included
+* [ ] Agent details unavailable to the submitter
 
 ### Adversarial review details
 <!-- Summarize the adversarial review, identify whether it used a separate reviewer or a fresh self-review pass, and explain how actionable findings were handled. -->
 * [ ] An AI Agent has not performed adversarial review on this PR
 
 * **Adversarial review agent(s), provider/model, and reasoning effort (if applicable):**
-* [ ] Adversarial review agent(s) used; details not included
+* [ ] Agent details unavailable to the submitter
 * **Reviewer/review approach and summary:**
 * **Findings resolved or left open (with reason):**
 * [ ] Review had zero findings
