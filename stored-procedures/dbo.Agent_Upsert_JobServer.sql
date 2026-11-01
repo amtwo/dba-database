@@ -1,6 +1,7 @@
 CREATE OR ALTER PROCEDURE dbo.Agent_Upsert_JobServer
     @job_name    SYSNAME,
-    @server_name SYSNAME = N'(LOCAL)'
+    @server_name SYSNAME = N'(LOCAL)',
+    @Debug       BIT = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -14,6 +15,7 @@ CREATED: 20260614
 
 PARAMETERS
 * These mirror the parameters of sp_add_jobserver, but with @job_name as the first parameter for easier use.
+* @Debug - When 1, reports the target assignment that would be added without changing the job.
 
 EXAMPLES:
 
@@ -51,6 +53,45 @@ BEGIN
 
     -- sp_add_jobserver records the original server name; (LOCAL) is stored as the
     -- actual server name, so match on either form to stay idempotent.
+
+    IF @Debug = 1
+    BEGIN
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM #sysjobservers
+            WHERE server_name = @server_name
+               OR
+               (
+                   @server_name IN (N'(LOCAL)', @local_server)
+                   AND server_name = @local_server
+               )
+        )
+        BEGIN
+            PRINT N'Debug mode: would INSERT a job-server assignment for job '
+                + COALESCE(QUOTENAME(@job_name), N'<NULL>')
+                + N' on server ' + COALESCE(QUOTENAME(@server_name), N'<NULL>') + N'.';
+        END
+        ELSE
+        BEGIN
+            PRINT N'Debug mode: the job-server assignment already exists; no change would be made.';
+
+            SELECT
+                server_id,
+                server_name,
+                enlist_date,
+                last_poll_date
+            FROM #sysjobservers
+            WHERE server_name = @server_name
+               OR
+               (
+                   @server_name IN (N'(LOCAL)', @local_server)
+                   AND server_name = @local_server
+               );
+        END;
+
+        RETURN;
+    END;
 
     IF NOT EXISTS
     (
