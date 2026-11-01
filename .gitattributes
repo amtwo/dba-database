@@ -1,3 +1,6 @@
+# Normalize text in the index and use CRLF in every working tree.
+* text=auto eol=crlf
+
 # linguist overrides
 *.cs linguist-language=C#
 *.ps1 linguist-language=Powershell

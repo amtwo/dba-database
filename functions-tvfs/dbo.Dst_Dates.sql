@@ -1,6 +1,6 @@
 ﻿CREATE OR ALTER FUNCTION dbo.Dst_Dates(
-			@InputDate DATE, 
-			@Locality CHAR(3) = 'USA')
+            @InputDate DATE, 
+            @Locality CHAR(3) = 'USA')
 RETURNS TABLE
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -22,149 +22,149 @@ MODIFICATIONS:
 AS
 RETURN
 (
-	WITH 
-		USA_DST AS (
-			/* Current DST rules for USA since 2007*/
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				/* Second Sunday in March */
-				DstStartDate    = DATEADD(DAY, 
-											(14 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 1)) + 1) % 7 + 7,
-											DATEFROMPARTS(YEAR(@InputDate), 3, 1)),
-				/* First Sunday in November */
-				DstEndDate      = DATEADD(DAY,
-											(8 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 11, 1))) % 7,
-											DATEFROMPARTS(YEAR(@InputDate), 11, 1))
-			WHERE @InputDate >= '20070101'
-			
-			UNION ALL
-			/* Legacy DST rules for USA since 1987-2006*/
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				/* First Sunday in April */
-				DstStartDate    = DATEADD(DAY, 
-											(8 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 4, 1))) % 7, 
-											DATEFROMPARTS(YEAR(@InputDate), 4, 1)),
-				/* Last Sunday in October */
-				DstEndDate      = DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 10, 31))
-			WHERE @InputDate >= '19840101'
-			  AND @InputDate <  '20070101'
-			
-			UNION ALL
-			/* Uniform Time Act 1967-1987*/
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				/* Last Sunday in April */
-				DstStartDate    =DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 4, 30)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 4, 30)),
-				/* Last Sunday in October */
-				DstEndDate      = DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 10, 31))
-			WHERE @InputDate >= '19670101'
-			  AND @InputDate <  '19840101'
-			
-			UNION ALL
-			/* Before DST was a thing */
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				DstStartDate    = NULL,
-				DstEndDate      = NULL
-			WHERE @InputDate <  '19670101'
-		),
-		EUR_DST AS (
-			/* Current DST rules for EU since 1996*/
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				/* Last Sunday in March */
-				DstStartDate    = DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
-				/* Last Sunday in October */
-				DstEndDate      = DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 10, 31))
-			WHERE @InputDate >= '19960101'
+    WITH 
+        USA_DST AS (
+            /* Current DST rules for USA since 2007*/
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                /* Second Sunday in March */
+                DstStartDate    = DATEADD(DAY, 
+                                            (14 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 1)) + 1) % 7 + 7,
+                                            DATEFROMPARTS(YEAR(@InputDate), 3, 1)),
+                /* First Sunday in November */
+                DstEndDate      = DATEADD(DAY,
+                                            (8 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 11, 1))) % 7,
+                                            DATEFROMPARTS(YEAR(@InputDate), 11, 1))
+            WHERE @InputDate >= '20070101'
+            
+            UNION ALL
+            /* Legacy DST rules for USA since 1987-2006*/
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                /* First Sunday in April */
+                DstStartDate    = DATEADD(DAY, 
+                                            (8 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 4, 1))) % 7, 
+                                            DATEFROMPARTS(YEAR(@InputDate), 4, 1)),
+                /* Last Sunday in October */
+                DstEndDate      = DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 10, 31))
+            WHERE @InputDate >= '19840101'
+              AND @InputDate <  '20070101'
+            
+            UNION ALL
+            /* Uniform Time Act 1967-1987*/
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                /* Last Sunday in April */
+                DstStartDate    =DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 4, 30)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 4, 30)),
+                /* Last Sunday in October */
+                DstEndDate      = DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 10, 31))
+            WHERE @InputDate >= '19670101'
+              AND @InputDate <  '19840101'
+            
+            UNION ALL
+            /* Before DST was a thing */
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                DstStartDate    = NULL,
+                DstEndDate      = NULL
+            WHERE @InputDate <  '19670101'
+        ),
+        EUR_DST AS (
+            /* Current DST rules for EU since 1996*/
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                /* Last Sunday in March */
+                DstStartDate    = DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
+                /* Last Sunday in October */
+                DstEndDate      = DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 10, 31))
+            WHERE @InputDate >= '19960101'
 
-			UNION ALL
-			/* DST rules for Initial EU harmonization*/
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				/* Last Sunday in March */
-				DstStartDate    = DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
-				/* Last Sunday in September */
-				DstEndDate      = DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 9, 30)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 9, 30))
-			WHERE @InputDate >= '19810101'
-			  AND @InputDate <  '19960101'
-			
-			UNION ALL
-			/* Before The EU was a thing */
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				DstStartDate    = NULL,
-				DstEndDate      = NULL
-			WHERE @InputDate <  '19810101'
-		),
-		UK_DST AS (
-			/* Current DST rules for UK since 2002*/
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				/* Last Sunday in March */
-				DstStartDate    = DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
-				/* Last Sunday in October */
-				DstEndDate      = DATEADD(DAY, 
-											-1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
-											DATEFROMPARTS(YEAR(@InputDate), 10, 31))
-			WHERE @InputDate >= '20020101'
+            UNION ALL
+            /* DST rules for Initial EU harmonization*/
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                /* Last Sunday in March */
+                DstStartDate    = DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
+                /* Last Sunday in September */
+                DstEndDate      = DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 9, 30)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 9, 30))
+            WHERE @InputDate >= '19810101'
+              AND @InputDate <  '19960101'
+            
+            UNION ALL
+            /* Before The EU was a thing */
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                DstStartDate    = NULL,
+                DstEndDate      = NULL
+            WHERE @InputDate <  '19810101'
+        ),
+        UK_DST AS (
+            /* Current DST rules for UK since 2002*/
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                /* Last Sunday in March */
+                DstStartDate    = DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
+                /* Last Sunday in October */
+                DstEndDate      = DATEADD(DAY, 
+                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
+                                            DATEFROMPARTS(YEAR(@InputDate), 10, 31))
+            WHERE @InputDate >= '20020101'
 
-			UNION ALL
-			/* Legacy DST rules 1972-2001*/
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				/* Third Sunday in March */
-				DstStartDate    = DATEADD(DAY, 
-											(21 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 1)) + 1) % 7 + 14, 
-											DATEFROMPARTS(YEAR(@InputDate), 3, 1)),
-				/* Fourth Sunday in October */
-				DstEndDate      = DATEADD(DAY, 
-											(28 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 1)) + 1) % 7 + 21, 
-											DATEFROMPARTS(YEAR(@InputDate), 10, 1))
-			WHERE @InputDate >= '19720101'
-			  AND @InputDate <  '20020101'
+            UNION ALL
+            /* Legacy DST rules 1972-2001*/
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                /* Third Sunday in March */
+                DstStartDate    = DATEADD(DAY, 
+                                            (21 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 1)) + 1) % 7 + 14, 
+                                            DATEFROMPARTS(YEAR(@InputDate), 3, 1)),
+                /* Fourth Sunday in October */
+                DstEndDate      = DATEADD(DAY, 
+                                            (28 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 1)) + 1) % 7 + 21, 
+                                            DATEFROMPARTS(YEAR(@InputDate), 10, 1))
+            WHERE @InputDate >= '19720101'
+              AND @InputDate <  '20020101'
 
-			UNION ALL
-			/* Permanent GMT+1 experiment*/
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				/* Third Sunday in March */
-				DstStartDate    = '19720101',
-				/* Fourth Sunday in October */
-				DstEndDate      = DATEADD(NANOSECOND, -1, '20020101')
-			WHERE @InputDate >= '19720101'
-			  AND @InputDate <  '20020101'
-			
-			UNION ALL
-			/* Before The DST was a thing */
-			SELECT 
-				DstYear         = DATEPART(YEAR, @InputDate),
-				DstStartDate    = NULL,
-				DstEndDate      = NULL
-			WHERE @InputDate <  '19681027'
-		)
-	SELECT * FROM USA_DST WHERE @Locality = 'USA'
-	UNION ALL
-	SELECT * FROM EUR_DST WHERE @Locality = 'EUR'
-	UNION ALL
-	SELECT * FROM UK_DST WHERE @Locality = 'UK'
+            UNION ALL
+            /* Permanent GMT+1 experiment*/
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                /* Third Sunday in March */
+                DstStartDate    = '19720101',
+                /* Fourth Sunday in October */
+                DstEndDate      = DATEADD(NANOSECOND, -1, '20020101')
+            WHERE @InputDate >= '19720101'
+              AND @InputDate <  '20020101'
+            
+            UNION ALL
+            /* Before The DST was a thing */
+            SELECT 
+                DstYear         = DATEPART(YEAR, @InputDate),
+                DstStartDate    = NULL,
+                DstEndDate      = NULL
+            WHERE @InputDate <  '19681027'
+        )
+    SELECT * FROM USA_DST WHERE @Locality = 'USA'
+    UNION ALL
+    SELECT * FROM EUR_DST WHERE @Locality = 'EUR'
+    UNION ALL
+    SELECT * FROM UK_DST WHERE @Locality = 'UK'
 );
 
 GO

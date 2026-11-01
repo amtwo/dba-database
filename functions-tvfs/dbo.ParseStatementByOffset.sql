@@ -4,7 +4,7 @@ GO
 
 
 ALTER FUNCTION dbo.ParseStatementByOffset (
-    @SqlHandle   	varbinary(64),
+    @SqlHandle      varbinary(64),
     @StartOffset int,
     @EndOffset   int
     )
@@ -19,7 +19,7 @@ PARAMETERS:
     @SqlHandle - Sql Handle (or Plan Handle) that is used to parse text.
     @StartOffset - Indicates, in bytes, beginning with 0, the starting position of the query that 
                    the row describes within the text of its batch or persisted object.
-    @EndOffset - 	Indicates, in bytes, starting with 0, the ending position of the query that the 
+    @EndOffset -    Indicates, in bytes, starting with 0, the ending position of the query that the 
                    row describes within the text of its batch or persisted object.
 EXAMPLES:
           SELECT st.*

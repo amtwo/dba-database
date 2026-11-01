@@ -4,7 +4,7 @@ GO
 
 
 ALTER PROCEDURE dbo.Check_AgLatency 
-	@Threshold int = 0,
+    @Threshold int = 0,
     @DbName nvarchar(128) = N'%',
     @AgName nvarchar(128) = N'%',
     @UnhealthyOnly bit = 0
@@ -105,7 +105,7 @@ INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, AgRole, SynchState, 
     JOIN sys.availability_replicas AS ar ON ar.group_id = ag.group_id 
     JOIN sys.dm_hadr_database_replica_states AS ds ON ds.group_id = ar.group_id AND ds.replica_id = ar.replica_id
     JOIN sys.dm_hadr_availability_replica_states AS rs ON rs.replica_id = ds.replica_id;
-	
+    
 
 --Lets make this easy, and create a temp table with the current status
 -- UNION perfmon counters with dbm_monitor_data. They should be the same, but we don't trust them, so we check both.
@@ -160,9 +160,9 @@ JOIN #Results r2 ON r2.AgName = r.AgName AND r2.DbName = r.DbName AND r2.LastHar
 -- Do filtering on the results here, rather than up above. 
 -- There's not much data here, so no perf advantage to doing it sooner.
     IF NOT EXISTS (SELECT 1 FROM #Results)
-    	SELECT 'No AGs Exist' AS AgStatus;
+        SELECT 'No AGs Exist' AS AgStatus;
     ELSE
-    	SELECT * 
+        SELECT * 
         FROM #Results AS r
         WHERE r.UnsentLogKb >= @Threshold
         AND r.DbName LIKE @DbName
