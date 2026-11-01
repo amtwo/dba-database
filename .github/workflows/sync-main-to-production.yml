@@ -1,0 +1,36 @@
+name: Sync main to production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-main-to-production
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fast-forward production to main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          production_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/production" --jq '.object.sha')
+
+          if [ "$production_sha" = "$SOURCE_SHA" ]; then
+            echo "production already points to $SOURCE_SHA"
+            exit 0
+          fi
+
+          gh api \
+            --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/git/refs/heads/production" \
+            --field sha="$SOURCE_SHA" \
+            --field force=false
