@@ -10,4 +10,21 @@ BEGIN
         );
 END;
 
+DECLARE @DisplayNameNullable bit,
+        @AlterDisplayNameSql nvarchar(4000);
+
+SELECT @DisplayNameNullable = is_nullable
+FROM sys.columns
+WHERE object_id = OBJECT_ID(N'dbo.TimeZones')
+    AND name = N'DisplayName'
+    AND max_length BETWEEN 1 AND 255;
+
+IF @DisplayNameNullable IS NOT NULL
+BEGIN
+    SET @AlterDisplayNameSql = N'ALTER TABLE dbo.TimeZones ALTER COLUMN DisplayName nvarchar(128) '
+        + CASE WHEN @DisplayNameNullable = 1 THEN N'NULL;' ELSE N'NOT NULL;' END;
+
+    EXEC sys.sp_executesql @AlterDisplayNameSql;
+END;
+
 
