@@ -14,7 +14,7 @@ AS
 AUTHOR: Cody 🤖
 DESCRIPTION
     Combines the top cumulative and positive-delta CPU, logical I/O, and execution-volume reports
-    into one ranked list across the databases selected by DBA.dbo.sp_ineachdb. Each source report
+    into one ranked list across the databases selected by dbo.sp_ineachdb. Each source report
     is ranked independently on a 0-100 scale. The CPU, I/O, and execution scores each use the
     better of their Cum and Delta ranks, and HeavyHitterScore is the equal-weight average of those
     three scores. This makes the ranking a transparent prioritization heuristic, not a comparison
@@ -33,7 +33,7 @@ PARAMETERS
 * @CompareOffsetHours - Comparison-window offset for Delta reports. Defaults to 168 hours.
 * @Top - Maximum rows requested from each source report per database and maximum rows returned.
 * @IncludeQuickieStoreAnalysis - Run sp_QuickieStore for the returned query hashes. NULL runs it
-  when it is installed in the DBA database, 0 skips it, and 1 requires it to be installed.
+  when it is installed in the current utility database, 0 skips it, and 1 requires it to be installed.
 * @Debug - Print the assembled command and source-report SQL.
 
 EXAMPLES:
@@ -59,8 +59,8 @@ BEGIN
 
     DECLARE @QuickieStoreInstalled bit = CASE WHEN EXISTS (
                 SELECT 1
-                FROM DBA.sys.procedures AS p
-                JOIN DBA.sys.schemas AS s
+                FROM sys.procedures AS p
+                JOIN sys.schemas AS s
                     ON s.schema_id = p.schema_id
                 WHERE s.name = N'dbo'
                   AND p.name = N'sp_QuickieStore'
@@ -70,7 +70,7 @@ BEGIN
 
     IF @IncludeQuickieStoreAnalysis = 1 AND @QuickieStoreInstalled = 0
     BEGIN
-        RAISERROR('sp_QuickieStore is not installed in the DBA database.', 16, 1);
+        RAISERROR('sp_QuickieStore is not installed in the current utility database.', 16, 1);
         RETURN;
     END;
 
@@ -202,7 +202,7 @@ DECLARE @CurrentDatabase sysname = DB_NAME(),
 IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @CurrentDatabase AND is_query_store_on = 1)
 BEGIN
     INSERT INTO #CpuCum (query_hash, Execs, CpuSec, CpuMsPerExec, LogicalIoPages, LogicalIoPagesPerExec, SampleQueryId, ObjectName, SampleText)
-    EXEC DBA.dbo.QueryStore_TopCpuCum
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopCpuCum
         @DatabaseName = @CurrentDatabase,
         @WindowStart  = @WindowStart,
         @WindowEnd    = @WindowEnd,
@@ -211,7 +211,7 @@ BEGIN
     UPDATE #CpuCum SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
     INSERT INTO #CpuDelta (query_hash, BaseExecs, NowExecs, BaseCpuSec, NowCpuSec, DeltaCpuSec, NowCpuMsPerExec, BaseCpuMsPerExec, CpuPerExecRatio, ExecRatio, IsNewQuery, SampleQueryId, ObjectName, SampleText)
-    EXEC DBA.dbo.QueryStore_TopCpuDelta
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopCpuDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
         @WindowEnd          = @WindowEnd,
@@ -221,7 +221,7 @@ BEGIN
     UPDATE #CpuDelta SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
     INSERT INTO #IoCum (query_hash, Execs, LogicalIoPages, LogicalReads, LogicalWrites, PhysicalReads, LogicalIoPagesPerExec, LogicalReadsPerExec, LogicalWritesPerExec, SampleQueryId, ObjectName, SampleText)
-    EXEC DBA.dbo.QueryStore_TopIoCum
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopIoCum
         @DatabaseName = @CurrentDatabase,
         @WindowStart  = @WindowStart,
         @WindowEnd    = @WindowEnd,
@@ -230,7 +230,7 @@ BEGIN
     UPDATE #IoCum SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
     INSERT INTO #IoDelta (query_hash, BaseExecs, NowExecs, BaseLogicalIoPages, NowLogicalIoPages, DeltaLogicalIoPages, BaseLogicalReads, NowLogicalReads, DeltaLogicalReads, BaseLogicalWrites, NowLogicalWrites, DeltaLogicalWrites, BasePhysicalReads, NowPhysicalReads, DeltaPhysicalReads, NowLogicalIoPagesPerExec, BaseLogicalIoPagesPerExec, IoPerExecRatio, ExecRatio, IsNewQuery, SampleQueryId, ObjectName, SampleText)
-    EXEC DBA.dbo.QueryStore_TopIoDelta
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopIoDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
         @WindowEnd          = @WindowEnd,
@@ -240,7 +240,7 @@ BEGIN
     UPDATE #IoDelta SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
     INSERT INTO #ExecutionCum (query_hash, Execs, CpuSec, LogicalIoPages, CpuMsPerExec, LogicalIoPagesPerExec, SampleQueryId, ObjectName, SampleText)
-    EXEC DBA.dbo.QueryStore_TopExecutionCum
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopExecutionCum
         @DatabaseName = @CurrentDatabase,
         @WindowStart  = @WindowStart,
         @WindowEnd    = @WindowEnd,
@@ -249,7 +249,7 @@ BEGIN
     UPDATE #ExecutionCum SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
     INSERT INTO #ExecutionDelta (query_hash, BaseExecs, NowExecs, DeltaExecs, ExecRatio, IsNewQuery, NowCpuMsPerExec, BaseCpuMsPerExec, CpuPerExecRatio, NowLogicalIoPagesPerExec, BaseLogicalIoPagesPerExec, IoPerExecRatio, SampleQueryId, ObjectName, SampleText)
-    EXEC DBA.dbo.QueryStore_TopExecutionDelta
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopExecutionDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
         @WindowEnd          = @WindowEnd,
@@ -262,7 +262,7 @@ END;';
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;
 
-    EXEC DBA.dbo.sp_ineachdb
+    EXEC dbo.sp_ineachdb
         @command         = @Command,
         @name_pattern    = @DbNamePattern,
         @database_list   = @DatabaseList,
@@ -380,7 +380,7 @@ END;';
         SampleQueryId = COALESCE(cc.SampleQueryId, cd.SampleQueryId, ic.SampleQueryId, id.SampleQueryId, ec.SampleQueryId, ed.SampleQueryId),
         ObjectName    = COALESCE(cc.ObjectName, cd.ObjectName, ic.ObjectName, id.ObjectName, ec.ObjectName, ed.ObjectName),
         SampleText    = COALESCE(cc.SampleText, cd.SampleText, ic.SampleText, id.SampleText, ec.SampleText, ed.SampleText),
-        QuickieStoreCommand = N'EXEC DBA.dbo.sp_QuickieStore @database_name = N'
+        QuickieStoreCommand = N'EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.sp_QuickieStore @database_name = N'
             + QUOTENAME(s.DatabaseName, NCHAR(39))
             + N', @include_query_hashes = N'
             + QUOTENAME(CONVERT(nvarchar(18), s.query_hash, 1), NCHAR(39))
@@ -407,8 +407,38 @@ END;';
     ORDER BY HeavyHitterScore DESC, s.CpuScore DESC, s.IoScore DESC, s.ExecutionScore DESC,
              s.DatabaseName, s.query_hash;
 
-    SELECT *
-    FROM #HeavyHitters
+    SELECT
+        hh.DatabaseName,
+        hh.query_hash,
+        hh.HeavyHitterScore,
+        hh.CpuScore,
+        hh.IoScore,
+        hh.ExecutionScore,
+        hh.CpuCumRankScore,
+        hh.CpuDeltaRankScore,
+        hh.IoCumRankScore,
+        hh.IoDeltaRankScore,
+        hh.ExecutionCumRankScore,
+        hh.ExecutionDeltaRankScore,
+        hh.CpuCumSec,
+        hh.CpuDeltaSec,
+        hh.IoCumPages,
+        hh.IoDeltaPages,
+        hh.ExecutionCumCount,
+        hh.ExecutionDelta,
+        hh.CpuCumMsPerExec,
+        hh.CpuDeltaPerExecRatio,
+        hh.IoCumPagesPerExec,
+        hh.IoDeltaPerExecRatio,
+        hh.ExecutionCumCpuMsPerExec,
+        hh.ExecutionCumIoPagesPerExec,
+        hh.ExecutionDeltaCpuPerExecRatio,
+        hh.ExecutionDeltaIoPerExecRatio,
+        hh.SampleQueryId,
+        hh.ObjectName,
+        hh.SampleText,
+        hh.QuickieStoreCommand
+    FROM #HeavyHitters AS hh
     ORDER BY HeavyHitterScore DESC, CpuScore DESC, IoScore DESC, ExecutionScore DESC,
              DatabaseName, query_hash;
 
@@ -423,7 +453,8 @@ END;';
         INTO #QuickieStoreQueries
         FROM #HeavyHitters AS hh;
 
-        DECLARE @QuickieDatabase sysname,
+        DECLARE @QuickieStoreProc nvarchar(400) = QUOTENAME(DB_NAME()) + N'.dbo.sp_QuickieStore',
+                @QuickieDatabase sysname,
                 @QuickieBatch int,
                 @QuickieHashes nvarchar(4000),
                 @QuickieStart datetimeoffset(7) = COALESCE(@WindowStart, CONVERT(datetimeoffset(7), '1753-01-01T00:00:00+00:00'));
@@ -447,7 +478,7 @@ END;';
                 FOR XML PATH(''), TYPE
             ).value('.', 'nvarchar(max)'), 1, 1, N'');
 
-            EXEC DBA.dbo.sp_QuickieStore
+            EXEC @QuickieStoreProc
                 @database_name = @QuickieDatabase,
                 @include_query_hashes = @QuickieHashes,
                 @sort_order = 'total cpu',

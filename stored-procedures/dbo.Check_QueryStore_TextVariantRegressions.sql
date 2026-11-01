@@ -10,12 +10,15 @@ CREATE OR ALTER PROCEDURE dbo.Check_QueryStore_TextVariantRegressions
     @MinExecs           bigint            = 20,
     @MinRatio           decimal(9, 2)     = 2.0,
     @MinCpuMs           decimal(9, 2)     = 1.0,
+    @NormalizeLineEndings bit             = 1,
+    @IgnoreAllWhiteSpace bit              = 1,
+    @IgnoreCapitalization bit              = 0,
     @Debug              bit               = 0
 AS
 /*************************************************************************************************
 AUTHOR: Cody 🤖
 DESCRIPTION
-    Runs dbo.QueryStore_TextVariantRegressions for each database selected by DBA.dbo.sp_ineachdb.
+    Runs dbo.QueryStore_TextVariantRegressions for each database selected by dbo.sp_ineachdb.
 
 PARAMETERS
     See dbo.QueryStore_TextVariantRegressions for parameter descriptions.
@@ -28,7 +31,7 @@ PARAMETERS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @Command nvarchar(max) = N'EXEC DBA.dbo.QueryStore_TextVariantRegressions'
+    DECLARE @Command nvarchar(max) = N'EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TextVariantRegressions'
         + N' @DatabaseName = DB_NAME()'
         + N', @VariantSince  = ' + QUOTENAME(CONVERT(nvarchar(35), @VariantSince, 127), '''')
         + N', @WindowEnd     = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''), N'NULL')
@@ -37,12 +40,15 @@ BEGIN
         + N', @MinExecs      = ' + CONVERT(nvarchar(20), @MinExecs)
         + N', @MinRatio      = ' + CONVERT(nvarchar(30), @MinRatio)
         + N', @MinCpuMs      = ' + CONVERT(nvarchar(30), @MinCpuMs)
+        + N', @NormalizeLineEndings = ' + CONVERT(nvarchar(1), @NormalizeLineEndings)
+        + N', @IgnoreAllWhiteSpace = ' + CONVERT(nvarchar(1), @IgnoreAllWhiteSpace)
+        + N', @IgnoreCapitalization = ' + CONVERT(nvarchar(1), @IgnoreCapitalization)
         + N', @Debug         = ' + CONVERT(nvarchar(1), @Debug) + N';';
 
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;
 
-    EXEC DBA.dbo.sp_ineachdb
+    EXEC dbo.sp_ineachdb
         @command         = @Command,
         @name_pattern    = @DbNamePattern,
         @database_list   = @DatabaseList,

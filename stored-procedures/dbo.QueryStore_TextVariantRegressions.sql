@@ -7,17 +7,19 @@ CREATE OR ALTER PROCEDURE dbo.QueryStore_TextVariantRegressions
     @MinExecs       bigint            = 20,
     @MinRatio       decimal(9, 2)     = 2.0,
     @MinCpuMs       decimal(9, 2)     = 1.0,
+    @NormalizeLineEndings bit         = 1,
+    @IgnoreAllWhiteSpace bit          = 1,
+    @IgnoreCapitalization bit          = 0,
     @Debug          bit               = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 DESCRIPTION
-    Finds regressions among changed-text variants of a statement. It matches query text after
-    removing spaces, tabs, carriage returns, and line feeds, then compares variants created at
-    or after @VariantSince with the busiest older variant. This can identify formatting-only
-    changes and cases where a query_hash changed. The report can suggest copying an older
-    variant's hint; it never changes Query Store state. Ratios compare different time windows,
-    so treat small differences as noise.
+    Finds regressions among query text variants by normalizing line endings, whitespace, and
+    capitalization according to the supplied options. More aggressive normalization can match
+    semantically different statements. The report can suggest copying an older variant's hint; it
+    never changes Query Store state. Requires Query Store hint support, available in SQL Server
+    2022 and later. Ratios compare different time windows, so treat small differences as noise.
 
 PARAMETERS
 * @DatabaseName - Target database name. The database must have Query Store enabled.
@@ -29,6 +31,9 @@ PARAMETERS
 * @MinExecs - Minimum executions required for a variant. Defaults to 20.
 * @MinRatio - Minimum new-variant to baseline CPU-per-execution ratio. Defaults to 2.0.
 * @MinCpuMs - Minimum CPU milliseconds per execution for the new variant. Defaults to 1.0.
+* @NormalizeLineEndings - Treat CRLF, CR, and LF line endings as equivalent. Defaults to 1.
+* @IgnoreAllWhiteSpace - Remove spaces, tabs, and line breaks before matching. Defaults to 1.
+* @IgnoreCapitalization - Ignore capitalization when matching. Defaults to 0.
 * @Debug - Print the assembled dynamic SQL.
 
 EXAMPLES:
@@ -66,18 +71,33 @@ BEGIN
     RETURN;
 END;
 
+DECLARE @SupportsQueryStoreHints bit = 0,
+        @VersionCheck nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql';
+
+EXEC @VersionCheck
+    N'SELECT @SupportsQueryStoreHints = CASE WHEN OBJECT_ID(N''sys.query_store_query_hints'') IS NULL THEN 0 ELSE 1 END;',
+    N'@SupportsQueryStoreHints bit OUTPUT',
+    @SupportsQueryStoreHints = @SupportsQueryStoreHints OUTPUT;
+
+IF @SupportsQueryStoreHints = 0
+BEGIN
+    RAISERROR('Database %s does not expose Query Store hints. This report requires Query Store hint support, available in SQL Server 2022 and later.', 16, 1, @DatabaseName);
+    RETURN;
+END;
+
 SET @WindowEnd     = ISNULL(@WindowEnd, SYSDATETIMEOFFSET());
 SET @BaselineEnd   = ISNULL(@BaselineEnd, @VariantSince);
 SET @BaselineStart = ISNULL(@BaselineStart, DATEADD(HOUR, -24, @BaselineEnd));
 
 DECLARE @Exec nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql',
+        @UtilityDatabase sysname = DB_NAME(),
         @Sql  nvarchar(max);
 
 SET @Sql = N'
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 1000;
 
-/* Variants that ran in either window, with whitespace-insensitive text hashes. */
+/* Variants that ran in either window, matched by normalized Query Store text. */
 CREATE TABLE #Active
 (
     query_id                   bigint            NOT NULL PRIMARY KEY,
@@ -85,31 +105,39 @@ CREATE TABLE #Active
     object_id                  bigint            NOT NULL,
     initial_compile_start_time datetimeoffset(7) NULL,
     IsNewVariant               bit               NOT NULL,
-    NormTextHash               binary(32)        NOT NULL,
-    HasCarriageReturn          bit               NOT NULL
+    QueryTextHash              binary(32)        NOT NULL
 );
 
-INSERT #Active (query_id, query_hash, object_id, initial_compile_start_time, IsNewVariant, NormTextHash, HasCarriageReturn)
+INSERT #Active (query_id, query_hash, object_id, initial_compile_start_time, IsNewVariant, QueryTextHash)
 SELECT
     q.query_id,
     q.query_hash,
     q.object_id,
     q.initial_compile_start_time,
     CASE WHEN q.initial_compile_start_time >= @VariantSince THEN 1 ELSE 0 END,
-    HASHBYTES(''SHA2_256'',
-        REPLACE(REPLACE(REPLACE(REPLACE(qt.query_sql_text COLLATE Latin1_General_BIN2,
-            NCHAR(13), N''''), NCHAR(10), N''''), NCHAR(9), N''''), NCHAR(32), N'''')),
-    CASE WHEN CHARINDEX(NCHAR(13), qt.query_sql_text) > 0 THEN 1 ELSE 0 END
+    HASHBYTES(''SHA2_256'', CASE WHEN @IgnoreCapitalization = 1
+        THEN LOWER(wn.NormalizedText COLLATE Latin1_General_100_CI_AS)
+        ELSE wn.NormalizedText COLLATE Latin1_General_BIN2 END)
 FROM sys.query_store_query AS q
 JOIN sys.query_store_query_text AS qt
     ON qt.query_text_id = q.query_text_id
+CROSS APPLY (
+    SELECT LineNormalizedText = CASE WHEN @NormalizeLineEndings = 1
+        THEN REPLACE(REPLACE(qt.query_sql_text, NCHAR(13) + NCHAR(10), NCHAR(10)), NCHAR(13), NCHAR(10))
+        ELSE qt.query_sql_text END
+) AS ln
+CROSS APPLY (
+    SELECT NormalizedText = CASE WHEN @IgnoreAllWhiteSpace = 1
+        THEN REPLACE(REPLACE(REPLACE(REPLACE(ln.LineNormalizedText, N'' '', N''''), NCHAR(9), N''''), NCHAR(10), N''''), NCHAR(13), N'''')
+        ELSE ln.LineNormalizedText END
+) AS wn
 WHERE q.last_execution_time >= @BaselineStart;
 
 /* Keep only statements that have both a new variant and an older one. */
 DELETE a
 FROM #Active AS a
-WHERE NOT EXISTS (SELECT 1 FROM #Active AS n WHERE n.NormTextHash = a.NormTextHash AND n.IsNewVariant = 1)
-   OR NOT EXISTS (SELECT 1 FROM #Active AS o WHERE o.NormTextHash = a.NormTextHash AND o.IsNewVariant = 0);
+WHERE NOT EXISTS (SELECT 1 FROM #Active AS n WHERE n.QueryTextHash = a.QueryTextHash AND n.IsNewVariant = 1)
+   OR NOT EXISTS (SELECT 1 FROM #Active AS o WHERE o.QueryTextHash = a.QueryTextHash AND o.IsNewVariant = 0);
 
 CREATE TABLE #Stats
 (
@@ -141,15 +169,14 @@ HAVING SUM(rs.count_executions) >= @MinExecs;
 
 ;WITH Baseline AS (
     SELECT
-        a.NormTextHash,
+        a.QueryTextHash,
         a.query_id,
         a.query_hash,
-        a.HasCarriageReturn,
         s.Execs,
         CpuMs = s.CpuUs / s.Execs / 1000.0,
         Reads = s.ReadsTotal / s.Execs,
         RowsOut = s.RowsTotal / s.Execs,
-        rn    = ROW_NUMBER() OVER (PARTITION BY a.NormTextHash ORDER BY s.Execs DESC)
+        rn    = ROW_NUMBER() OVER (PARTITION BY a.QueryTextHash ORDER BY s.Execs DESC)
     FROM #Active AS a
     JOIN #Stats AS s
         ON s.query_id = a.query_id
@@ -160,14 +187,12 @@ SELECT
     NewQueryHash       = n.query_hash,
     ObjectName         = OBJECT_SCHEMA_NAME(n.object_id) + N''.'' + OBJECT_NAME(n.object_id),
     NewCompiled        = n.initial_compile_start_time,
-    NewLineEndings     = CASE WHEN n.HasCarriageReturn = 1 THEN ''CRLF'' ELSE ''LF'' END,
     NewExecs           = ns.Execs,
     NewCpuMs           = CONVERT(decimal(18, 2), ns.CpuUs / ns.Execs / 1000.0),
     NewReads           = CONVERT(bigint, ns.ReadsTotal / ns.Execs),
     NewRows            = CONVERT(decimal(18, 1), ns.RowsTotal / ns.Execs),
     BaselineQueryId    = b.query_id,
     BaselineQueryHash  = b.query_hash,
-    BaselineLineEndings = CASE WHEN b.HasCarriageReturn = 1 THEN ''CRLF'' ELSE ''LF'' END,
     BaselineExecs      = b.Execs,
     BaselineCpuMs      = CONVERT(decimal(18, 2), b.CpuMs),
     BaselineReads      = CONVERT(bigint, b.Reads),
@@ -178,7 +203,7 @@ SELECT
     NewHasHint         = CASE WHEN nh.query_id IS NULL THEN 0 ELSE 1 END,
     NewHasForcedPlan   = CASE WHEN EXISTS (SELECT 1 FROM sys.query_store_plan AS fp WHERE fp.query_id = n.query_id AND fp.is_forced_plan = 1) THEN 1 ELSE 0 END,
     BaselineHint       = bh.query_hint_text,
-    QuickieStoreCommand = N''EXEC DBA.dbo.sp_QuickieStore @database_name = N'' + NCHAR(39)
+    QuickieStoreCommand = N''EXEC '' + QUOTENAME(@UtilityDatabase) + N''.dbo.sp_QuickieStore @database_name = N'' + NCHAR(39)
         + REPLACE(@DatabaseName, NCHAR(39), NCHAR(39) + NCHAR(39)) + NCHAR(39)
         + N'', @include_query_ids = N'' + NCHAR(39) + CONVERT(nvarchar(20), n.query_id)
         + N'','' + CONVERT(nvarchar(20), b.query_id) + NCHAR(39)
@@ -194,7 +219,7 @@ FROM #Active AS n
 JOIN #Stats AS ns
     ON ns.query_id = n.query_id
 JOIN Baseline AS b
-    ON b.NormTextHash = n.NormTextHash
+    ON b.QueryTextHash = n.QueryTextHash
    AND b.rn = 1
 LEFT JOIN sys.query_store_query_hints AS nh
     ON nh.query_id = n.query_id
@@ -209,13 +234,17 @@ IF @Debug = 1
     PRINT @Sql;
 
 EXEC @Exec @Sql,
-    N'@DatabaseName sysname, @VariantSince datetimeoffset(7), @WindowEnd datetimeoffset(7), @BaselineStart datetimeoffset(7), @BaselineEnd datetimeoffset(7), @MinExecs bigint, @MinRatio decimal(9, 2), @MinCpuMs decimal(9, 2)',
+    N'@DatabaseName sysname, @UtilityDatabase sysname, @VariantSince datetimeoffset(7), @WindowEnd datetimeoffset(7), @BaselineStart datetimeoffset(7), @BaselineEnd datetimeoffset(7), @MinExecs bigint, @MinRatio decimal(9, 2), @MinCpuMs decimal(9, 2), @NormalizeLineEndings bit, @IgnoreAllWhiteSpace bit, @IgnoreCapitalization bit',
     @DatabaseName  = @DatabaseName,
+    @UtilityDatabase = @UtilityDatabase,
     @VariantSince  = @VariantSince,
     @WindowEnd     = @WindowEnd,
     @BaselineStart = @BaselineStart,
     @BaselineEnd   = @BaselineEnd,
     @MinExecs      = @MinExecs,
     @MinRatio      = @MinRatio,
-    @MinCpuMs      = @MinCpuMs;
+    @MinCpuMs      = @MinCpuMs,
+    @NormalizeLineEndings = @NormalizeLineEndings,
+    @IgnoreAllWhiteSpace = @IgnoreAllWhiteSpace,
+    @IgnoreCapitalization = @IgnoreCapitalization;
 GO

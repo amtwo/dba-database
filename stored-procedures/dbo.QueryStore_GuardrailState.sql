@@ -11,6 +11,7 @@ DESCRIPTION
     query_id, so a changed statement can create a new, unguarded variant while the old variant
     retains its hint or forced plan. The report identifies orphaned guardrails and generates
     statements to copy a sibling hint or matching forced plan. It never applies those changes.
+    Requires Query Store hint support, available in SQL Server 2022 and later.
 
 PARAMETERS
 * @DatabaseName - Target database name. The database must have Query Store enabled.
@@ -50,7 +51,22 @@ BEGIN
     RETURN;
 END;
 
+DECLARE @SupportsQueryStoreHints bit = 0,
+        @VersionCheck nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql';
+
+EXEC @VersionCheck
+    N'SELECT @SupportsQueryStoreHints = CASE WHEN OBJECT_ID(N''sys.query_store_query_hints'') IS NULL THEN 0 ELSE 1 END;',
+    N'@SupportsQueryStoreHints bit OUTPUT',
+    @SupportsQueryStoreHints = @SupportsQueryStoreHints OUTPUT;
+
+IF @SupportsQueryStoreHints = 0
+BEGIN
+    RAISERROR('Database %s does not expose Query Store hints. This report requires Query Store hint support, available in SQL Server 2022 and later.', 16, 1, @DatabaseName);
+    RETURN;
+END;
+
 DECLARE @Exec nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql',
+        @UtilityDatabase sysname = DB_NAME(),
         @Sql  nvarchar(max);
 
 /* Parse the list here, in dba's context: STRING_SPLIT needs compat 130+, and the target database
@@ -131,7 +147,7 @@ SELECT
     v.HintFailures,
     v.ForcedPlanId,
     v.ForceFailures,
-    QuickieStoreCommand = N''EXEC DBA.dbo.sp_QuickieStore @database_name = N'' + NCHAR(39)
+    QuickieStoreCommand = N''EXEC '' + QUOTENAME(@UtilityDatabase) + N''.dbo.sp_QuickieStore @database_name = N'' + NCHAR(39)
         + REPLACE(@DatabaseName, NCHAR(39), NCHAR(39) + NCHAR(39)) + NCHAR(39)
         + N'', @include_query_ids = N'' + NCHAR(39) + CONVERT(nvarchar(20), v.query_id) + NCHAR(39)
         + N'', @start_date = N'' + NCHAR(39) + N''1753-01-01T00:00:00+00:00'' + NCHAR(39)
@@ -174,8 +190,9 @@ IF @Debug = 1
     PRINT @Sql;
 
 EXEC @Exec @Sql,
-    N'@DatabaseName sysname, @QueryHashes nvarchar(max), @ActiveDays int',
+    N'@DatabaseName sysname, @UtilityDatabase sysname, @QueryHashes nvarchar(max), @ActiveDays int',
     @DatabaseName = @DatabaseName,
+    @UtilityDatabase = @UtilityDatabase,
     @QueryHashes = @QueryHashes,
     @ActiveDays  = @ActiveDays;
 GO

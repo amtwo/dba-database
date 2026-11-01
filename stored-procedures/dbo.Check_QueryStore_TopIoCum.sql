@@ -11,7 +11,7 @@ AS
 /*************************************************************************************************
 AUTHOR: Cody 🤖
 DESCRIPTION
-    Runs dbo.QueryStore_TopIoCum for each database selected by DBA.dbo.sp_ineachdb.
+    Runs dbo.QueryStore_TopIoCum for each database selected by dbo.sp_ineachdb.
 
 PARAMETERS
     See dbo.QueryStore_TopIoCum for parameter descriptions.
@@ -24,7 +24,7 @@ PARAMETERS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @Command nvarchar(max) = N'EXEC DBA.dbo.QueryStore_TopIoCum'
+    DECLARE @Command nvarchar(max) = N'EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopIoCum'
         + N' @DatabaseName = DB_NAME()'
         + N', @WindowStart = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowStart, 127), ''''), N'NULL')
         + N', @WindowEnd   = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''), N'NULL')
@@ -34,7 +34,7 @@ BEGIN
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;
 
-    EXEC DBA.dbo.sp_ineachdb
+    EXEC dbo.sp_ineachdb
         @command         = @Command,
         @name_pattern    = @DbNamePattern,
         @database_list   = @DatabaseList,

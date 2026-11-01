@@ -13,7 +13,7 @@ DESCRIPTION
     window. It reports a query when the most recently used plan costs at least @MinCpuRatio times
     as much CPU per execution as another plan that meets the execution threshold. Queries with
     only one plan are excluded. The result includes statements to force the lower-CPU plan and
-    roll back that change; this procedure is read-only.
+    roll back that change; this procedure is read-only. Requires Query Store hint support, available in SQL Server 2022 and later.
 
 PARAMETERS
 * @DatabaseName - Target database name. The database must have Query Store enabled.
@@ -55,6 +55,20 @@ BEGIN
     RETURN;
 END;
 
+DECLARE @SupportsQueryStoreHints bit = 0,
+        @VersionCheck nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql';
+
+EXEC @VersionCheck
+    N'SELECT @SupportsQueryStoreHints = CASE WHEN OBJECT_ID(N''sys.query_store_query_hints'') IS NULL THEN 0 ELSE 1 END;',
+    N'@SupportsQueryStoreHints bit OUTPUT',
+    @SupportsQueryStoreHints = @SupportsQueryStoreHints OUTPUT;
+
+IF @SupportsQueryStoreHints = 0
+BEGIN
+    RAISERROR('Database %s does not expose Query Store hints. This report requires Query Store hint support, available in SQL Server 2022 and later.', 16, 1, @DatabaseName);
+    RETURN;
+END;
+
 SET @WindowEnd   = ISNULL(@WindowEnd, SYSDATETIMEOFFSET());
 SET @WindowStart = ISNULL(@WindowStart, DATEADD(HOUR, -4, @WindowEnd));
 
@@ -84,7 +98,7 @@ WITH PlanStats AS (
         p.plan_id,
         p.query_plan_hash,
         p.is_forced_plan,
-        PlanLastExec = p.last_execution_time,
+        PlanLastExec = MAX(rs.last_execution_time),
         Execs        = SUM(rs.count_executions),
         CpuMsPerExec = SUM(rs.avg_cpu_time * rs.count_executions) / NULLIF(SUM(rs.count_executions), 0) / 1000.0,
         DurMsPerExec = SUM(rs.avg_duration * rs.count_executions) / NULLIF(SUM(rs.count_executions), 0) / 1000.0,
@@ -96,7 +110,7 @@ WITH PlanStats AS (
     JOIN sys.query_store_query AS q
         ON q.query_id = p.query_id
     WHERE rs.runtime_stats_interval_id BETWEEN @MinIntervalId AND @MaxIntervalId
-    GROUP BY q.query_id, q.query_hash, q.object_id, p.plan_id, p.query_plan_hash, p.is_forced_plan, p.last_execution_time
+    GROUP BY q.query_id, q.query_hash, q.object_id, p.plan_id, p.query_plan_hash, p.is_forced_plan
     HAVING SUM(rs.count_executions) >= @MinExecs
 ),
 Ranked AS (

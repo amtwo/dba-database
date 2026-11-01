@@ -18,12 +18,12 @@ AS
 AUTHOR: Cody 🤖
 DESCRIPTION
     Searches Query Store query text by calling sp_QuickieStore for each database selected by
-    DBA.dbo.sp_ineachdb. QuickieStore applies its supported text-search filters and returns the
+    dbo.sp_ineachdb. QuickieStore applies its supported text-search filters and returns the
     requested sort metric and detail level.
 
 PARAMETERS
     See sp_QuickieStore for query text, date window, sort order, query type, and expert mode details.
-    Database selection parameters are passed to DBA.dbo.sp_ineachdb.
+    Database selection parameters are passed to dbo.sp_ineachdb.
 
 EXAMPLES:
 -- Search all eligible databases for query text containing a string:
@@ -46,21 +46,23 @@ BEGIN
 
     IF NOT EXISTS (
         SELECT 1
-        FROM DBA.sys.procedures AS p
-        JOIN DBA.sys.schemas AS s
+        FROM sys.procedures AS p
+        JOIN sys.schemas AS s
             ON s.schema_id = p.schema_id
         WHERE s.name = N'dbo'
           AND p.name = N'sp_QuickieStore'
     )
     BEGIN
-        RAISERROR('sp_QuickieStore is not installed in the DBA database.', 16, 1);
+        RAISERROR('sp_QuickieStore is not installed in the current utility database.', 16, 1);
         RETURN;
     END;
 
-    DECLARE @Command nvarchar(max) = N'EXEC DBA.dbo.sp_QuickieStore'
+    DECLARE @Command nvarchar(max) = N'EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.sp_QuickieStore'
         + N' @database_name = DB_NAME()'
-        + N', @query_text_search = ' + COALESCE(QUOTENAME(@SearchText, ''''), N'NULL')
-        + N', @query_text_search_not = ' + COALESCE(QUOTENAME(@SearchTextNot, ''''), N'NULL')
+        + N', @query_text_search = ' + CASE WHEN @SearchText IS NULL THEN N'NULL'
+            ELSE N'N''' + REPLACE(@SearchText, N'''', N'''''') + N'''' END
+        + N', @query_text_search_not = ' + CASE WHEN @SearchTextNot IS NULL THEN N'NULL'
+            ELSE N'N''' + REPLACE(@SearchTextNot, N'''', N'''''') + N'''' END
         + N', @start_date = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowStart, 127), ''''), N'NULL')
         + N', @end_date = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''), N'NULL')
         + N', @sort_order = ' + QUOTENAME(@SortOrder, '''')
@@ -73,7 +75,7 @@ BEGIN
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;
 
-    EXEC DBA.dbo.sp_ineachdb
+    EXEC dbo.sp_ineachdb
         @command         = @Command,
         @name_pattern    = @DbNamePattern,
         @database_list   = @DatabaseList,
