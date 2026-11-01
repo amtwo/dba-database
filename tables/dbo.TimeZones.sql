@@ -11,8 +11,10 @@ BEGIN
 END;
 
 IF (SELECT max_length FROM sys.columns WHERE object_id = object_id('dbo.TimeZones')) <256 /*data length =2x*/
-ALTER TABLE dbo.TimeZones 
-    ALTER COLUMN DisplayName nvarchar(128);
+BEGIN
+    ALTER TABLE dbo.TimeZones 
+        ALTER COLUMN DisplayName nvarchar(128);
+END;
 
 
 
