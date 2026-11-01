@@ -13,7 +13,7 @@
 - Keep one database object per `.sql` file under the existing object-type folders. Preserve the install order documented in `CONTRIBUTING.md` and implemented by `Install-LatestDbaDatabase.ps1`.
 - New T-SQL should follow the documented header, naming, formatting, idempotency, and safety conventions. Check dynamic SQL, permissions, transaction effects, and server/database scope carefully.
 - For PowerShell changes, preserve the scripts' existing parameter and error-handling behavior unless the task calls for changing it.
-- Use checks that do not connect to or modify a SQL Server when possible: inspect the diff, check whitespace, and use available static parsing/lint tools. Do not claim runtime behavior is verified without executing it in a suitable development environment.
+- Use checks that do not connect to or modify a SQL Server when possible: inspect the diff, check whitespace, and use available static parsing/lint tools. Before reporting runtime validation as unavailable, check the [ARM64 SQL Edge smoke-testing instructions in CONTRIBUTING.md](CONTRIBUTING.md#arm64-sql-edge-smoke-testing); on Windows ARM64 or macOS, Docker may provide a disposable smoke-test option even when no local SQL Server or `sqlcmd` is installed. Do not claim runtime behavior is verified without executing it in a suitable development environment, and report SQL Edge results with its compatibility limitations.
 - In your completion summary, identify changed files, checks performed, and any runtime checks that could not be performed.
 
 ## Adversarial review

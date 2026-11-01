@@ -29,11 +29,11 @@ RETURN
                 DstYear         = DATEPART(YEAR, @InputDate),
                 /* Second Sunday in March */
                 DstStartDate    = DATEADD(DAY, 
-                                            (14 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 1)) + 1) % 7 + 7,
+                                            (14 - (DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 3, 1)) % 7 + 1) + 1) % 7 + 7,
                                             DATEFROMPARTS(YEAR(@InputDate), 3, 1)),
                 /* First Sunday in November */
                 DstEndDate      = DATEADD(DAY,
-                                            (8 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 11, 1))) % 7,
+                                            (8 - (DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 11, 1)) % 7 + 1)) % 7,
                                             DATEFROMPARTS(YEAR(@InputDate), 11, 1))
             WHERE @InputDate >= '20070101'
             
@@ -43,11 +43,11 @@ RETURN
                 DstYear         = DATEPART(YEAR, @InputDate),
                 /* First Sunday in April */
                 DstStartDate    = DATEADD(DAY, 
-                                            (8 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 4, 1))) % 7, 
+                                            (8 - (DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 4, 1)) % 7 + 1)) % 7,
                                             DATEFROMPARTS(YEAR(@InputDate), 4, 1)),
                 /* Last Sunday in October */
                 DstEndDate      = DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 10, 31)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 10, 31))
             WHERE @InputDate >= '19840101'
               AND @InputDate <  '20070101'
@@ -58,11 +58,11 @@ RETURN
                 DstYear         = DATEPART(YEAR, @InputDate),
                 /* Last Sunday in April */
                 DstStartDate    =DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 4, 30)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 4, 30)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 4, 30)),
                 /* Last Sunday in October */
                 DstEndDate      = DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 10, 31)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 10, 31))
             WHERE @InputDate >= '19670101'
               AND @InputDate <  '19840101'
@@ -81,11 +81,11 @@ RETURN
                 DstYear         = DATEPART(YEAR, @InputDate),
                 /* Last Sunday in March */
                 DstStartDate    = DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 3, 31)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
                 /* Last Sunday in October */
                 DstEndDate      = DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 10, 31)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 10, 31))
             WHERE @InputDate >= '19960101'
 
@@ -95,11 +95,11 @@ RETURN
                 DstYear         = DATEPART(YEAR, @InputDate),
                 /* Last Sunday in March */
                 DstStartDate    = DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 3, 31)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
                 /* Last Sunday in September */
                 DstEndDate      = DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 9, 30)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 9, 30)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 9, 30))
             WHERE @InputDate >= '19810101'
               AND @InputDate <  '19960101'
@@ -118,11 +118,11 @@ RETURN
                 DstYear         = DATEPART(YEAR, @InputDate),
                 /* Last Sunday in March */
                 DstStartDate    = DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 31)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 3, 31)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 3, 31)),
                 /* Last Sunday in October */
                 DstEndDate      = DATEADD(DAY, 
-                                            -1 * (DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 31)) - 1), 
+                                            -1 * ((DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 10, 31)) % 7 + 1) - 1),
                                             DATEFROMPARTS(YEAR(@InputDate), 10, 31))
             WHERE @InputDate >= '20020101'
 
@@ -132,11 +132,11 @@ RETURN
                 DstYear         = DATEPART(YEAR, @InputDate),
                 /* Third Sunday in March */
                 DstStartDate    = DATEADD(DAY, 
-                                            (21 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 3, 1)) + 1) % 7 + 14, 
+                                            (21 - (DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 3, 1)) % 7 + 1) + 1) % 7 + 14,
                                             DATEFROMPARTS(YEAR(@InputDate), 3, 1)),
                 /* Fourth Sunday in October */
                 DstEndDate      = DATEADD(DAY, 
-                                            (28 - DATEPART(WEEKDAY, DATEFROMPARTS(YEAR(@InputDate), 10, 1)) + 1) % 7 + 21, 
+                                            (28 - (DATEDIFF(DAY, '19000107', DATEFROMPARTS(YEAR(@InputDate), 10, 1)) % 7 + 1) + 1) % 7 + 21,
                                             DATEFROMPARTS(YEAR(@InputDate), 10, 1))
             WHERE @InputDate >= '19720101'
               AND @InputDate <  '20020101'
