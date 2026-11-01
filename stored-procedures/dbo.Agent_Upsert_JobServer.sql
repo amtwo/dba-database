@@ -36,6 +36,8 @@ BEGIN
         THROW 50000, @msg, 1;
     END
 
+    DECLARE @local_server SYSNAME = CONVERT(SYSNAME, SERVERPROPERTY('ServerName'));
+
     CREATE TABLE #sysjobservers
     (
         server_id      INT,
@@ -47,37 +49,30 @@ BEGIN
     INSERT INTO #sysjobservers
     EXEC msdb.dbo.sp_help_jobserver @job_id = @job_id;
 
-    CREATE TABLE #systargetservers
-    (
-          server_id            INT,
-          server_name          NVARCHAR(30),
-          location             NVARCHAR(200),
-          time_zone_adjustment INT,
-          enlist_date          DATETIME,
-          last_poll_date       DATETIME,
-          status               INT,
-          unread_instructions  INT,
-          local_time           DATETIME,
-          enlisted_by_nt_user  NVARCHAR(100),
-          poll_interval        INT
-    );
-    
     -- sp_add_jobserver records the original server name; (LOCAL) is stored as the
     -- actual server name, so match on either form to stay idempotent.
-    
-    IF NOT EXISTS (SELECT 1 FROM #sysjobservers WHERE server_name = @server_name OR (server_name = @@SERVERNAME AND @server_name = N'(LOCAL)'))
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM #sysjobservers
+        WHERE server_name = @server_name
+           OR
+           (
+               @server_name IN (N'(LOCAL)', @local_server)
+               AND server_name = @local_server
+           )
+    )
     BEGIN
-        IF (@server_name = N'(LOCAL)' OR @server_name = @@SERVERNAME)
+        IF @server_name IN (N'(LOCAL)', @local_server)
         BEGIN
             EXEC msdb.dbo.sp_add_jobserver @job_id = @job_id;
-            PRINT 'A'
         END;
         ELSE
         BEGIN
             EXEC msdb.dbo.sp_add_jobserver
                 @job_id    = @job_id,
                 @server_name = @server_name;
-            PRINT 'B'
         END;
     END
     
