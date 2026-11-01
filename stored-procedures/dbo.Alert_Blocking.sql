@@ -514,7 +514,7 @@ BEGIN
     IF (@Debug = 0)
     BEGIN
         SET @EmailSubject = 'ALERT: Blocking Detected';
-        SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + @EmailFromDomain;
+        SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + @EmailFromDomain + '>;
 
         EXEC msdb.dbo.sp_send_dbmail
             @recipients = @EmailRecipients,
