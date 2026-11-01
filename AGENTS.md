@@ -16,6 +16,13 @@
 - Use checks that do not connect to or modify a SQL Server when possible: inspect the diff, check whitespace, and use available static parsing/lint tools. Do not claim runtime behavior is verified without executing it in a suitable development environment.
 - In your completion summary, identify changed files, checks performed, and any runtime checks that could not be performed.
 
+## Adversarial review
+
+- Every pull request must receive an adversarial review before it is ready to merge. Use a separate reviewer agent when available; otherwise perform a fresh review pass that does not assume the implementation is correct.
+- Review the complete PR diff against its base and inspect relevant surrounding code, callers, configuration, and tests. Trace important behavior and failure paths. Consider correctness, security, data loss, permissions, compatibility, and operational effects where relevant; do not limit the review to style or the changed lines alone.
+- Report only actionable findings, with severity, exact file and line references, evidence, and a concrete failure scenario. State explicitly when the review found no actionable issues. Do not claim a thorough review without examining the relevant context.
+- Address a finding only when highly confident the proposed fix is correct and appropriately scoped. If confidence is not high, do not make a speculative change; explain the uncertainty and ask the user how to proceed.
+
 ## Contribution workflow
 
 - Follow the issue-first and pull request process in [CONTRIBUTING.md](CONTRIBUTING.md). Do not create issues, comments, branches, or pull requests unless the user asks you to.

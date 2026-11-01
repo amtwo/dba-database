@@ -11,6 +11,19 @@ If you haven't already, skim CONTRIBUTING.md — especially the coding conventio
 
 <!-- Link the related issue when available. See CONTRIBUTING.md for the issue-first workflow. -->
 
+## Coding agent disclosure
+
+<!-- For agent-assisted changes, identify each coding agent's provider/model and reasoning effort. If a detail is not exposed, say so rather than guessing. -->
+
+* **Coding agent(s), provider/model, and reasoning effort (if applicable):**
+
+## Adversarial review
+
+<!-- Summarize the adversarial review, identify whether it used a separate reviewer or a fresh self-review pass, and explain how actionable findings were handled. -->
+
+* **Reviewer/review approach and summary:**
+* **Findings resolved or left open (with reason):**
+
 ## How did you test it?
 
 <!-- List checks that were actually performed; distinguish static checks from runtime testing. -->
