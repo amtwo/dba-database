@@ -42,6 +42,7 @@ MODIFICATIONS:
                           - If a procedure is running, this is the EXEC statement
     20171208 - AM2 - Add some functionality so that I can alert on number of sessions blocked.
     20171210 - AM2 - Add Debug Mode = 2 to return the Email Body as a chunk of HTML instead of emailing it.
+    20261101 - Cody - Hardened blocking alert validation and metadata handling.
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
@@ -56,13 +57,15 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 IF ((@BlockingDurationThreshold IS NOT NULL AND @BlockedSessionThreshold IS NOT NULL)
     OR COALESCE(@BlockingDurationThreshold,@BlockedSessionThreshold) IS NULL)
 BEGIN
-    RAISERROR('Must supply either @BlockingDurationThreshold or @BlockedSessionThreshold (but not both).',16,1)
+    RAISERROR('Must supply either @BlockingDurationThreshold or @BlockedSessionThreshold (but not both).',16,1);
+    RETURN;
 END;
 
 
 DECLARE @Id int = 1,
         @Spid int = 0,
         @JobIdHex nvarchar(34),
+        @JobIdBinary binary(16),
         @JobName nvarchar(256),
         @WaitResource nvarchar(256),
         @DbName nvarchar(256),
@@ -228,8 +231,19 @@ BEGIN
     FROM #Blocked
     WHERE ProgramName LIKE 'SQLAgent - TSQL JobStep (Job 0x%';
 
-    SELECT @Sql = N'SELECT @JobName = name FROM msdb.dbo.sysjobs WHERE job_id = ' + @JobIdHex;
-    EXEC sp_executesql @Sql, N'@JobName nvarchar(256) OUT', @JobName = @JobName OUT;
+    SET @JobIdBinary = TRY_CONVERT(binary(16), @JobIdHex, 1);
+    SET @JobName = NULL;
+
+    IF LEN(@JobIdHex) = 34
+        AND LEFT(@JobIdHex,2) = N'0x'
+        AND @JobIdBinary IS NOT NULL
+    BEGIN
+        SELECT @JobName = name
+        FROM msdb.dbo.sysjobs
+        WHERE CONVERT(binary(16),job_id) = @JobIdBinary;
+    END;
+
+    SET @JobName = COALESCE(@JobName,N'Unknown Job');
 
     UPDATE b
     SET ProgramName = LEFT(REPLACE(ProgramName,@JobIdHex,@JobName),128)
@@ -272,7 +286,7 @@ BEGIN
         SET @DbName = db_name(SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource)));
         --now get the object name
         SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256);
-        SET @Sql = 'SELECT @ObjectName = schema_name(schema_id) + ''.'' + name FROM [' + @DbName + '].sys.objects WHERE object_id = SUBSTRING(@WaitResource,0,CHARINDEX('':'',@WaitResource))';
+        SET @Sql = 'SELECT @ObjectName = schema_name(schema_id) + ''.'' + name FROM ' + QUOTENAME(@DbName) + '.sys.objects WHERE object_id = SUBSTRING(@WaitResource,0,CHARINDEX('':'',@WaitResource))';
         EXEC sp_executesql @sql,N'@WaitResource nvarchar(256),@ObjectName nvarchar(256) OUT',@WaitResource = @WaitResource, @ObjectName = @ObjectName OUT;
         --Now populate the WaitDescription column
         UPDATE b
