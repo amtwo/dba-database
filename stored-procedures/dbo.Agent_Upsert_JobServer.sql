@@ -1,6 +1,7 @@
 CREATE OR ALTER PROCEDURE dbo.Agent_Upsert_JobServer
     @job_name    SYSNAME,
-    @server_name SYSNAME = N'(LOCAL)'
+    @server_name SYSNAME = N'(LOCAL)',
+    @Debug       bit = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -14,9 +15,14 @@ CREATED: 20260614
 
 PARAMETERS
 * These mirror the parameters of sp_add_jobserver, but with @job_name as the first parameter for easier use.
+* @Debug - When 1, reports the proposed or existing target assignment without changing the job.
 
 EXAMPLES:
+* Preview the server assignment without changing the job (assumes the job exists):
+    EXEC dbo.Agent_Upsert_JobServer @job_name = N'Nightly Job', @Debug = 1;
 
+MODIFICATIONS:
+    20261101 - Resolve the current local server name, add @Debug previews, and remove legacy debug prints.
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
@@ -36,6 +42,8 @@ BEGIN
         THROW 50000, @msg, 1;
     END
 
+    DECLARE @local_server SYSNAME = CONVERT(SYSNAME, SERVERPROPERTY('ServerName'));
+
     CREATE TABLE #sysjobservers
     (
         server_id      INT,
@@ -47,39 +55,67 @@ BEGIN
     INSERT INTO #sysjobservers
     EXEC msdb.dbo.sp_help_jobserver @job_id = @job_id;
 
-    CREATE TABLE #systargetservers
-    (
-          server_id            INT,
-          server_name          NVARCHAR(30),
-          location             NVARCHAR(200),
-          time_zone_adjustment INT,
-          enlist_date          DATETIME,
-          last_poll_date       DATETIME,
-          status               INT,
-          unread_instructions  INT,
-          local_time           DATETIME,
-          enlisted_by_nt_user  NVARCHAR(100),
-          poll_interval        INT
-    );
-    
     -- sp_add_jobserver records the original server name; (LOCAL) is stored as the
     -- actual server name, so match on either form to stay idempotent.
-    
-    IF NOT EXISTS (SELECT 1 FROM #sysjobservers WHERE server_name = @server_name OR (server_name = @@SERVERNAME AND @server_name = N'(LOCAL)'))
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM #sysjobservers
+        WHERE server_name = @server_name
+           OR
+           (
+               @server_name IN (N'(LOCAL)', @local_server)
+               AND server_name = @local_server
+           )
+    )
     BEGIN
-        IF (@server_name = N'(LOCAL)' OR @server_name = @@SERVERNAME)
+        IF @server_name IN (N'(LOCAL)', @local_server)
         BEGIN
-            EXEC msdb.dbo.sp_add_jobserver @job_id = @job_id;
-            PRINT 'A'
-        END;
+            IF @Debug = 1
+            BEGIN
+                PRINT N'Debug mode: would INSERT a local job-server assignment for job '
+                    + COALESCE(QUOTENAME(@job_name), N'<NULL>')
+                    + N' on server ' + COALESCE(QUOTENAME(@local_server), N'<NULL>') + N'.';
+            END
+            ELSE
+            BEGIN
+                EXEC msdb.dbo.sp_add_jobserver @job_id = @job_id;
+            END;
+        END
         ELSE
         BEGIN
-            EXEC msdb.dbo.sp_add_jobserver
-                @job_id    = @job_id,
-                @server_name = @server_name;
-            PRINT 'B'
+            IF @Debug = 1
+            BEGIN
+                PRINT N'Debug mode: would INSERT a remote job-server assignment for job '
+                    + COALESCE(QUOTENAME(@job_name), N'<NULL>')
+                    + N' on server ' + COALESCE(QUOTENAME(@server_name), N'<NULL>') + N'.';
+            END
+            ELSE
+            BEGIN
+                EXEC msdb.dbo.sp_add_jobserver
+                    @job_id      = @job_id,
+                    @server_name = @server_name;
+            END;
         END;
     END
+    ELSE IF @Debug = 1
+    BEGIN
+        PRINT N'Debug mode: the job-server assignment already exists; no change would be made.';
+
+        SELECT
+            server_id,
+            server_name,
+            enlist_date,
+            last_poll_date
+        FROM #sysjobservers
+        WHERE server_name = @server_name
+           OR
+           (
+               @server_name IN (N'(LOCAL)', @local_server)
+               AND server_name = @local_server
+           );
+    END;
     
 END
 GO
