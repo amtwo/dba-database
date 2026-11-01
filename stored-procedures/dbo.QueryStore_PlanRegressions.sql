@@ -41,7 +41,6 @@ EXAMPLES:
 *************************************************************************************************/
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-SET LOCK_TIMEOUT 1000;
 
 IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @DatabaseName)
 BEGIN
@@ -170,10 +169,18 @@ ORDER BY ExcessCpuSec DESC;';
 IF @Debug = 1
     PRINT @Sql;
 
-EXEC @Exec @Sql,
-    N'@WindowStart datetimeoffset(7), @WindowEnd datetimeoffset(7), @MinExecs bigint, @MinCpuRatio decimal(9, 2)',
-    @WindowStart = @WindowStart,
-    @WindowEnd   = @WindowEnd,
-    @MinExecs    = @MinExecs,
-    @MinCpuRatio = @MinCpuRatio;
+DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
+BEGIN TRY
+    EXEC @Exec @Sql,
+        N'@WindowStart datetimeoffset(7), @WindowEnd datetimeoffset(7), @MinExecs bigint, @MinCpuRatio decimal(9, 2)',
+        @WindowStart = @WindowStart,
+        @WindowEnd   = @WindowEnd,
+        @MinExecs    = @MinExecs,
+        @MinCpuRatio = @MinCpuRatio;
+END TRY
+BEGIN CATCH
+    SET LOCK_TIMEOUT @PreviousLockTimeout;
+    THROW;
+END CATCH;
+SET LOCK_TIMEOUT @PreviousLockTimeout;
 GO

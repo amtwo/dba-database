@@ -37,7 +37,6 @@ EXAMPLES:
 
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-SET LOCK_TIMEOUT 1000;
 
 IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @DatabaseName)
 BEGIN
@@ -189,10 +188,18 @@ ORDER BY v.query_hash, v.last_execution_time DESC;';
 IF @Debug = 1
     PRINT @Sql;
 
-EXEC @Exec @Sql,
-    N'@DatabaseName sysname, @UtilityDatabase sysname, @QueryHashes nvarchar(max), @ActiveDays int',
-    @DatabaseName = @DatabaseName,
-    @UtilityDatabase = @UtilityDatabase,
-    @QueryHashes = @QueryHashes,
-    @ActiveDays  = @ActiveDays;
+DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
+BEGIN TRY
+    EXEC @Exec @Sql,
+        N'@DatabaseName sysname, @UtilityDatabase sysname, @QueryHashes nvarchar(max), @ActiveDays int',
+        @DatabaseName = @DatabaseName,
+        @UtilityDatabase = @UtilityDatabase,
+        @QueryHashes = @QueryHashes,
+        @ActiveDays  = @ActiveDays;
+END TRY
+BEGIN CATCH
+    SET LOCK_TIMEOUT @PreviousLockTimeout;
+    THROW;
+END CATCH;
+SET LOCK_TIMEOUT @PreviousLockTimeout;
 GO

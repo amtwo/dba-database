@@ -57,7 +57,6 @@ EXAMPLES:
 *************************************************************************************************/
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-SET LOCK_TIMEOUT 1000;
 
 IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @DatabaseName)
 BEGIN
@@ -233,18 +232,26 @@ ORDER BY ExcessCpuSec DESC;';
 IF @Debug = 1
     PRINT @Sql;
 
-EXEC @Exec @Sql,
-    N'@DatabaseName sysname, @UtilityDatabase sysname, @VariantSince datetimeoffset(7), @WindowEnd datetimeoffset(7), @BaselineStart datetimeoffset(7), @BaselineEnd datetimeoffset(7), @MinExecs bigint, @MinRatio decimal(9, 2), @MinCpuMs decimal(9, 2), @NormalizeLineEndings bit, @IgnoreAllWhiteSpace bit, @IgnoreCapitalization bit',
-    @DatabaseName  = @DatabaseName,
-    @UtilityDatabase = @UtilityDatabase,
-    @VariantSince  = @VariantSince,
-    @WindowEnd     = @WindowEnd,
-    @BaselineStart = @BaselineStart,
-    @BaselineEnd   = @BaselineEnd,
-    @MinExecs      = @MinExecs,
-    @MinRatio      = @MinRatio,
-    @MinCpuMs      = @MinCpuMs,
-    @NormalizeLineEndings = @NormalizeLineEndings,
-    @IgnoreAllWhiteSpace = @IgnoreAllWhiteSpace,
-    @IgnoreCapitalization = @IgnoreCapitalization;
+DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
+BEGIN TRY
+    EXEC @Exec @Sql,
+        N'@DatabaseName sysname, @UtilityDatabase sysname, @VariantSince datetimeoffset(7), @WindowEnd datetimeoffset(7), @BaselineStart datetimeoffset(7), @BaselineEnd datetimeoffset(7), @MinExecs bigint, @MinRatio decimal(9, 2), @MinCpuMs decimal(9, 2), @NormalizeLineEndings bit, @IgnoreAllWhiteSpace bit, @IgnoreCapitalization bit',
+        @DatabaseName  = @DatabaseName,
+        @UtilityDatabase = @UtilityDatabase,
+        @VariantSince  = @VariantSince,
+        @WindowEnd     = @WindowEnd,
+        @BaselineStart = @BaselineStart,
+        @BaselineEnd   = @BaselineEnd,
+        @MinExecs      = @MinExecs,
+        @MinRatio      = @MinRatio,
+        @MinCpuMs      = @MinCpuMs,
+        @NormalizeLineEndings = @NormalizeLineEndings,
+        @IgnoreAllWhiteSpace = @IgnoreAllWhiteSpace,
+        @IgnoreCapitalization = @IgnoreCapitalization;
+END TRY
+BEGIN CATCH
+    SET LOCK_TIMEOUT @PreviousLockTimeout;
+    THROW;
+END CATCH;
+SET LOCK_TIMEOUT @PreviousLockTimeout;
 GO

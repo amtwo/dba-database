@@ -37,7 +37,6 @@ EXAMPLES:
 *************************************************************************************************/
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-SET LOCK_TIMEOUT 1000;
 
 IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @DatabaseName)
 BEGIN
@@ -101,9 +100,17 @@ ORDER BY qs.Execs DESC;';
 IF @Debug = 1
     PRINT @Sql;
 
-EXEC @Exec @Sql,
-    N'@WindowStart datetimeoffset(7), @WindowEnd datetimeoffset(7), @Top int',
-    @WindowStart = @WindowStart,
-    @WindowEnd   = @WindowEnd,
-    @Top         = @Top;
+DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
+BEGIN TRY
+    EXEC @Exec @Sql,
+        N'@WindowStart datetimeoffset(7), @WindowEnd datetimeoffset(7), @Top int',
+        @WindowStart = @WindowStart,
+        @WindowEnd   = @WindowEnd,
+        @Top         = @Top;
+END TRY
+BEGIN CATCH
+    SET LOCK_TIMEOUT @PreviousLockTimeout;
+    THROW;
+END CATCH;
+SET LOCK_TIMEOUT @PreviousLockTimeout;
 GO
