@@ -13,10 +13,10 @@ If you haven't already, skim CONTRIBUTING.md — especially the coding conventio
 
 ## Coding agent & Review agent disclosure
 
-* AI coding agents are allowed for code contributions. 
-* AI coding agents are **encouraged** for adversarial reviews prior to PR submission. 
+* AI coding agents are allowed for code contributions.
+* AI coding agents are **encouraged** for adversarial reviews prior to PR submission.
 
-To help me evaluate your PR, please identify any agent used to write or modify code, including its provider, model, and reasoning effort when available. This information is context for review, not a measure of capability. If a detail is not exposed, say so rather than guessing; if no AI coding agent was used, say so.
+To help me evaluate your PR, please identify any agent used to write or modify code, including its provider, model, and reasoning effort when available. This information is context for review, not a measure of capability. Agents may not be able to fill this in themselves, humans can optionally complete the section; neither humans nor Agents should ever guess about answers.
 
 ### Coding agent details:
 <!-- Summarize AI Agent(s) used for coding -->
