@@ -36,3 +36,4 @@ $url = "https://raw.githubusercontent.com/erikdarlingdata/DarlingData/master"
 Invoke-WebRequest -Uri "$($url)/sp_PressureDetector/sp_PressureDetector.sql" -OutFile "$($dir)\oss\darlingdata\sp_PressureDetector.sql"
 Invoke-WebRequest -Uri "$($url)/sp_HumanEvents/sp_HumanEvents.sql" -OutFile "$($dir)\oss\darlingdata\sp_HumanEvents.sql"
 
+Invoke-WebRequest -Uri "$($url)/sp_QuickieStore/sp_QuickieStore.sql" -OutFile "$($dir)\oss\darlingdata\sp_QuickieStore.sql"
