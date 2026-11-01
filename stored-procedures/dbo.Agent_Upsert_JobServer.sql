@@ -54,45 +54,6 @@ BEGIN
     -- sp_add_jobserver records the original server name; (LOCAL) is stored as the
     -- actual server name, so match on either form to stay idempotent.
 
-    IF @Debug = 1
-    BEGIN
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM #sysjobservers
-            WHERE server_name = @server_name
-               OR
-               (
-                   @server_name IN (N'(LOCAL)', @local_server)
-                   AND server_name = @local_server
-               )
-        )
-        BEGIN
-            PRINT N'Debug mode: would INSERT a job-server assignment for job '
-                + COALESCE(QUOTENAME(@job_name), N'<NULL>')
-                + N' on server ' + COALESCE(QUOTENAME(@server_name), N'<NULL>') + N'.';
-        END
-        ELSE
-        BEGIN
-            PRINT N'Debug mode: the job-server assignment already exists; no change would be made.';
-
-            SELECT
-                server_id,
-                server_name,
-                enlist_date,
-                last_poll_date
-            FROM #sysjobservers
-            WHERE server_name = @server_name
-               OR
-               (
-                   @server_name IN (N'(LOCAL)', @local_server)
-                   AND server_name = @local_server
-               );
-        END;
-
-        RETURN;
-    END;
-
     IF NOT EXISTS
     (
         SELECT 1
@@ -107,15 +68,50 @@ BEGIN
     BEGIN
         IF @server_name IN (N'(LOCAL)', @local_server)
         BEGIN
-            EXEC msdb.dbo.sp_add_jobserver @job_id = @job_id;
-        END;
+            IF @Debug = 1
+            BEGIN
+                PRINT N'Debug mode: would INSERT a local job-server assignment for job '
+                    + COALESCE(QUOTENAME(@job_name), N'<NULL>')
+                    + N' on server ' + COALESCE(QUOTENAME(@local_server), N'<NULL>') + N'.';
+            END
+            ELSE
+            BEGIN
+                EXEC msdb.dbo.sp_add_jobserver @job_id = @job_id;
+            END;
+        END
         ELSE
         BEGIN
-            EXEC msdb.dbo.sp_add_jobserver
-                @job_id    = @job_id,
-                @server_name = @server_name;
+            IF @Debug = 1
+            BEGIN
+                PRINT N'Debug mode: would INSERT a remote job-server assignment for job '
+                    + COALESCE(QUOTENAME(@job_name), N'<NULL>')
+                    + N' on server ' + COALESCE(QUOTENAME(@server_name), N'<NULL>') + N'.';
+            END
+            ELSE
+            BEGIN
+                EXEC msdb.dbo.sp_add_jobserver
+                    @job_id      = @job_id,
+                    @server_name = @server_name;
+            END;
         END;
     END
+    ELSE IF @Debug = 1
+    BEGIN
+        PRINT N'Debug mode: the job-server assignment already exists; no change would be made.';
+
+        SELECT
+            server_id,
+            server_name,
+            enlist_date,
+            last_poll_date
+        FROM #sysjobservers
+        WHERE server_name = @server_name
+           OR
+           (
+               @server_name IN (N'(LOCAL)', @local_server)
+               AND server_name = @local_server
+           );
+    END;
     
 END
 GO
