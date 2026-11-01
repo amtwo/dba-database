@@ -2,7 +2,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = object_id('dbo.TimeZo
 BEGIN
     CREATE TABLE dbo.TimeZones (
         TimeZoneId      nvarchar(64),
-        DisplayName     nvarchar(64),
+        DisplayName     nvarchar(128),
         StandardName    nvarchar(64),
         DaylightName    nvarchar(64),
         SupportsDaylightSavingTime bit,
