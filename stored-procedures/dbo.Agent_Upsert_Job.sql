@@ -6,7 +6,7 @@ CREATE OR ALTER PROCEDURE dbo.Agent_Upsert_Job
     @owner_login_name           SYSNAME       = N'sa',
     @notify_level_email         INT           = 0,      -- 0 never, 1 success, 2 failure, 3 always
     @notify_email_operator_name SYSNAME       = NULL,
-    @Debug                      BIT           = 0
+    @Debug                      bit           = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -23,7 +23,11 @@ PARAMETERS
 * @Debug - When 1, reports the insert or update that would be made without changing the job.
 
 EXAMPLES:
+* Preview the insert or update without changing the job:
+    EXEC dbo.Agent_Upsert_Job @job_name = N'Nightly Job', @Debug = 1;
 
+MODIFICATIONS:
+    20261101 - Add @Debug preview output for job inserts and updates.
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.

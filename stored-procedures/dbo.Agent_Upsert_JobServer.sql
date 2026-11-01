@@ -1,7 +1,7 @@
 CREATE OR ALTER PROCEDURE dbo.Agent_Upsert_JobServer
     @job_name    SYSNAME,
     @server_name SYSNAME = N'(LOCAL)',
-    @Debug       BIT = 0
+    @Debug       bit = 0
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -15,10 +15,14 @@ CREATED: 20260614
 
 PARAMETERS
 * These mirror the parameters of sp_add_jobserver, but with @job_name as the first parameter for easier use.
-* @Debug - When 1, reports the target assignment that would be added without changing the job.
+* @Debug - When 1, reports the proposed or existing target assignment without changing the job.
 
 EXAMPLES:
+* Preview the server assignment without changing the job (assumes the job exists):
+    EXEC dbo.Agent_Upsert_JobServer @job_name = N'Nightly Job', @Debug = 1;
 
+MODIFICATIONS:
+    20261101 - Resolve the current local server name, add @Debug previews, and remove legacy debug prints.
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
