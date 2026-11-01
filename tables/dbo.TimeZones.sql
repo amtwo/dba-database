@@ -30,7 +30,7 @@ BEGIN
     IF @DisplayNameSystemTypeId IN (167, 175)
     BEGIN
         SET @DisplayNameTargetLength = CASE
-            WHEN @DisplayNameMaxLength = -1 THEN -1
+            WHEN @DisplayNameMaxLength = -1 OR @DisplayNameMaxLength > 4000 THEN -1
             WHEN @DisplayNameMaxLength < 128 THEN 128
             ELSE @DisplayNameMaxLength
         END;
