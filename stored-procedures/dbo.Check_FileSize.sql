@@ -1,4 +1,4 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_FileSize'))
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_FileSize'))
     EXEC ('CREATE PROCEDURE dbo.Check_FileSize AS SELECT ''This is a stub''')
 GO
 
@@ -63,9 +63,10 @@ CREATE TABLE #FileSizeInfo
 
 
 --if no @OrderBy supplied or an invalid option, use DBName, LogicalFileName
-IF (@OrderBy IS NULL 
-    OR EXISTS (SELECT * FROM dbo.fn_split(REPLACE(REPLACE(@OrderBy,'ASC',''),'DESC',''),',')
-            WHERE value NOT IN (SELECT name FROM tempdb.sys.columns WHERE object_id = object_id('tempdb..#FileSizeInfo') )
+IF (@OrderBy IS NULL
+    OR @OrderBy = N''
+    OR EXISTS (SELECT 1 FROM STRING_SPLIT(REPLACE(REPLACE(@OrderBy,'ASC',''),'DESC',''), N',')
+            WHERE LTRIM(RTRIM(value)) NOT IN (SELECT name FROM tempdb.sys.columns WHERE object_id = object_id('tempdb..#FileSizeInfo'))
         ))
     SET @OrderBy = 'ServerName, DbName, LogicalFileName';
 
