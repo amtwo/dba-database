@@ -13,6 +13,7 @@ Some of this code (including the installer!) assumes that the First Responder Ki
 
 ### SQL Server compatibility
 * The goal is to support SQL Server versions still supported by Microsoft. Each script can have additional version or feature requirements; check its header and test it against the target version.
+* The DBA database itself must use compatibility level 130 or later for first-party code that uses `STRING_SPLIT`. The distributed `dbo.fn_split` helper remains available for lower-compatibility databases and is retained in `Set_AGReadOnlyRouting` to preserve the caller's routing-list order.
 * Many legacy scripts may run on older versions, including SQL Server 2005, but those versions are unsupported and new changes are not tested against them.
 
 ### To install
