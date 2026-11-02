@@ -66,8 +66,6 @@ END;
 
 DECLARE @Id int = 1,
         @Spid int = 0,
-        @JobIdHex nvarchar(34),
-        @JobName nvarchar(256),
         @WaitResource nvarchar(256),
         @ResourceType varchar(8),
         @DbName nvarchar(256),
@@ -232,27 +230,12 @@ BEGIN
     WHERE ID = @Id;
 END;
 
---Convert Hex job_ids for SQL Agent jobs to names.
-WHILE EXISTS (
-    SELECT 1
-    FROM #Blocked b
-    CROSS APPLY dbo.SqlAgentJobId_Get(b.ProgramName) jobId
-    WHERE jobId.JobIdHex IS NOT NULL
-)
-BEGIN
-    SELECT TOP (1)
-        @Id = b.ID,
-        @JobIdHex = jobId.JobIdHex,
-        @JobName = jobId.JobName
-    FROM #Blocked b
-    CROSS APPLY dbo.SqlAgentJobId_Get(b.ProgramName) jobId
-    WHERE jobId.JobIdHex IS NOT NULL;
-
-    UPDATE b
-    SET ProgramName = LEFT(REPLACE(ProgramName,@JobIdHex,@JobName),128)
-    FROM #Blocked b
-    WHERE ID = @Id;
-END;
+--Convert Hex job IDs for SQL Agent jobs to names.
+UPDATE b
+SET ProgramName = LEFT(REPLACE(b.ProgramName, jobId.JobIdHex, jobId.JobName), 128)
+FROM #Blocked b
+CROSS APPLY dbo.SqlAgentJobId_Get(b.ProgramName) jobId
+WHERE jobId.JobIdHex IS NOT NULL;
 
 --Decode wait resources.
 DECLARE wait_cur CURSOR LOCAL FAST_FORWARD FOR
