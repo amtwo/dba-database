@@ -42,6 +42,7 @@ CREATED: 20140228
 PARAMETERS
 * @object_name - Optional - accept three-part object name (Database.Schema.Table)
         - If not provided, #tables should exist & be populated, otherwise, raiserror
+* @debug - Optional - print the first generated lookup statement and return without changing a caller-provided #tables; later recursive statements depend on lookup results and are not generated in debug mode.
 **************************************************************************************************
 MODIFICATIONS:
        YYYYMMDDD - Initials - Description of changes
@@ -66,11 +67,19 @@ SET NOCOUNT ON
     END
 
 
-    DECLARE @sql nvarchar(2070)
-    DECLARE @DbName varchar(256)
-    DECLARE @SchemaName varchar(256)
-    DECLARE @TableName varchar(256)
-    DECLARE @ObjType char(2)
+    DECLARE @sql nvarchar(2070);
+    DECLARE @DbName sysname;
+    DECLARE @SchemaName sysname;
+    DECLARE @TableName sysname;
+    DECLARE @ObjType char(2);
+    DECLARE @QuotedDbName nvarchar(258);
+    DECLARE @ObjectName nvarchar(517);
+
+    IF EXISTS (SELECT 1 FROM #tables WHERE DbName IS NULL)
+    BEGIN
+        RAISERROR ('Database names in #tables cannot be NULL.', 16, 1);
+        RETURN -1;
+    END
     
     WHILE EXISTS(SELECT 1 FROM #tables WHERE COALESCE(ObjType,'x') <> 'U')
     BEGIN
@@ -83,12 +92,28 @@ SET NOCOUNT ON
         WHILE @@FETCH_STATUS = 0
         BEGIN
             -- Get the object types for everything in this DB
-            SET @sql = N'UPDATE t SET ObjType = o.type FROM #tables t JOIN ' + @DbName + '.sys.objects o ON o.schema_id = schema_id(t.SchemaName) AND o.name = t.TableName WHERE t.DbName = ''' + @DbName + ''''
+            SET @QuotedDbName = QUOTENAME(@DbName);
+            SET @sql = N'USE ' + @QuotedDbName + N';
+                UPDATE t
+                SET ObjType = o.type
+                FROM #tables AS t
+                JOIN sys.objects AS o
+                    ON o.name = t.TableName COLLATE DATABASE_DEFAULT
+                JOIN sys.schemas AS sch
+                    ON sch.schema_id = o.schema_id
+                    AND sch.name = t.SchemaName COLLATE DATABASE_DEFAULT
+                WHERE t.DbName COLLATE DATABASE_DEFAULT = @DbName;';
             IF @debug = 1
             BEGIN
-                EXEC dbo.Debug_Print @DebugMessage = @sql
+                EXEC dbo.Debug_Print @DebugMessage = @sql;
+                PRINT N'    @DbName: ' + @DbName;
+                CLOSE db_cur;
+                DEALLOCATE db_cur;
+                RETURN;
             END
-            EXEC (@sql)
+            EXEC sys.sp_executesql @sql,
+                N'@DbName sysname',
+                @DbName = @DbName;
 
             IF EXISTS (SELECT 1 FROM #tables WHERE DbName = @DbName AND ObjType IS NULL)
             BEGIN
@@ -108,31 +133,72 @@ SET NOCOUNT ON
                 IF (@ObjType ='SN') 
                 BEGIN
                     --Its not a table. Delete the current row & replace with object(s) it references
-                    DELETE #tables WHERE DbName = @DbName AND SchemaName = @SchemaName AND TableName = @TableName
-                    SET @sql = N'INSERT INTO #tables (DbName, SchemaName, TableName) SELECT COALESCE(PARSENAME(base_object_name,3),db_name()), '
-                            + 'COALESCE(PARSENAME(base_object_name,2),schema_name()), PARSENAME(base_object_name,1)  FROM ' + @DbName 
-                                + '.sys.synonyms WHERE name = ''' + @TableName + ''' AND schema_id = schema_id(''' + @SchemaName + ''')'
+                    SET @sql = N'USE ' + @QuotedDbName + N';
+                        INSERT INTO #tables (DbName, SchemaName, TableName)
+                        SELECT COALESCE(PARSENAME(base_object_name, 3), DB_NAME()),
+                            COALESCE(PARSENAME(base_object_name, 2), SCHEMA_NAME()),
+                            PARSENAME(base_object_name, 1)
+                        FROM sys.synonyms AS syn
+                        JOIN sys.schemas AS sch
+                            ON sch.schema_id = syn.schema_id
+                        WHERE syn.name = @TableName COLLATE DATABASE_DEFAULT
+                            AND sch.name = @SchemaName COLLATE DATABASE_DEFAULT;';
                     IF @debug = 1
                     BEGIN
-                        EXEC dbo.Debug_Print @DebugMessage = @sql
+                        EXEC dbo.Debug_Print @DebugMessage = @sql;
+                        PRINT N'    @DbName: ' + @DbName;
+                        PRINT N'    @TableName: ' + @TableName;
+                        PRINT N'    @SchemaName: ' + @SchemaName;
+                        CLOSE tab_cur;
+                        DEALLOCATE tab_cur;
+                        CLOSE db_cur;
+                        DEALLOCATE db_cur;
+                        RETURN;
                     END
-                    EXEC (@sql)
+                    DELETE #tables WHERE DbName = @DbName AND SchemaName = @SchemaName AND TableName = @TableName;
+                    EXEC sys.sp_executesql @sql,
+                        N'@TableName sysname, @SchemaName sysname',
+                        @TableName = @TableName,
+                        @SchemaName = @SchemaName;
                 END 
                 
                 ELSE IF (@ObjType <> 'U')
                 BEGIN
                     --Its not a table. Delete the current row & replace with object(s) it references
-                    DELETE #tables WHERE DbName = @DbName AND SchemaName = @SchemaName AND TableName = @TableName
-                    SET @sql = N'INSERT INTO #tables (DbName, SchemaName, TableName) SELECT DISTINCT COALESCE(referenced_database_name,''' 
-                            + @DbName + '''), COALESCE(referenced_schema_name,''' + @SchemaName + '''), referenced_entity_name FROM ' + QUOTENAME(@DbName) 
-                            + '.sys.dm_sql_referenced_entities (''' + QUOTENAME(@SchemaName) + '.' + QUOTENAME(@TableName) + ''',''OBJECT'') r '
-                            + 'WHERE NOT EXISTS(SELECT 1 FROM #tables t WHERE t.DbName = COALESCE(r.referenced_database_name,''' + @DbName + ''') AND '
-                            + 't.SchemaName = COALESCE(r.referenced_schema_name,''' + @SchemaName + ''') AND t.TableName = r.referenced_entity_name)'
+                    SET @ObjectName = QUOTENAME(@SchemaName) + N'.' + QUOTENAME(@TableName);
+                    SET @sql = N'USE ' + @QuotedDbName + N';
+                        INSERT INTO #tables (DbName, SchemaName, TableName)
+                        SELECT DISTINCT
+                            COALESCE(referenced_database_name, @DbName),
+                            COALESCE(referenced_schema_name, @SchemaName),
+                            referenced_entity_name
+                        FROM sys.dm_sql_referenced_entities(@ObjectName, N''OBJECT'') AS r
+                        WHERE NOT EXISTS (
+                            SELECT 1
+                            FROM #tables AS t
+                            WHERE t.DbName COLLATE DATABASE_DEFAULT = COALESCE(r.referenced_database_name, @DbName) COLLATE DATABASE_DEFAULT
+                                AND t.SchemaName COLLATE DATABASE_DEFAULT = COALESCE(r.referenced_schema_name, @SchemaName) COLLATE DATABASE_DEFAULT
+                                AND t.TableName COLLATE DATABASE_DEFAULT = r.referenced_entity_name COLLATE DATABASE_DEFAULT
+                        );';
                     IF @debug = 1
                     BEGIN
-                        EXEC dbo.Debug_Print @DebugMessage = @sql
+                        EXEC dbo.Debug_Print @DebugMessage = @sql;
+                        PRINT N'    @DbName: ' + @DbName;
+                        PRINT N'    @SchemaName: ' + @SchemaName;
+                        PRINT N'    @TableName: ' + @TableName;
+                        PRINT N'    @ObjectName: ' + @ObjectName;
+                        CLOSE tab_cur;
+                        DEALLOCATE tab_cur;
+                        CLOSE db_cur;
+                        DEALLOCATE db_cur;
+                        RETURN;
                     END
-                    EXEC (@sql)
+                    DELETE #tables WHERE DbName = @DbName AND SchemaName = @SchemaName AND TableName = @TableName;
+                    EXEC sys.sp_executesql @sql,
+                        N'@DbName sysname, @SchemaName sysname, @ObjectName nvarchar(517)',
+                        @DbName = @DbName,
+                        @SchemaName = @SchemaName,
+                        @ObjectName = @ObjectName;
                 END
                 FETCH NEXT FROM tab_cur INTO @SchemaName, @TableName, @ObjType
             END
