@@ -63,7 +63,7 @@ SET @WindowStart = ISNULL(@WindowStart, DATEADD(HOUR, -4, @WindowEnd));
 DECLARE @Exec nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql',
         @Sql  nvarchar(max);
 
-SET @Sql = N'
+SET @Sql = CONVERT(nvarchar(max), N'') + N'
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 1000;
 
