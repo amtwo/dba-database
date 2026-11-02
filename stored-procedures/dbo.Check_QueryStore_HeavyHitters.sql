@@ -29,7 +29,8 @@ PARAMETERS
 * @DbExcludeList - Explicit database exclusion list passed to dbo.sp_ineachdb.
 * @WindowStart - Start of the reporting window. NULL means all retained history for Cum reports;
   Delta reports default to one hour before @WindowEnd.
-* @WindowEnd - End of the reporting window. Defaults to the current time.
+* @WindowEnd - End of the reporting window. Defaults to the current time for cumulative reports.
+  Delta reports default to each database's completed-interval boundary when this is omitted.
 * @CompareOffsetHours - Comparison-window offset for Delta reports. Defaults to 168 hours.
 * @Top - Maximum rows requested from each source report per database and maximum rows returned.
 * @IncludeQuickieStoreAnalysis - Run sp_QuickieStore for the returned query hashes. NULL runs it
@@ -55,6 +56,7 @@ EXAMPLES:
 BEGIN
     SET NOCOUNT ON;
 
+    DECLARE @DeltaWindowEnd datetimeoffset(7) = @WindowEnd;
     SET @WindowEnd = ISNULL(@WindowEnd, SYSDATETIMEOFFSET());
 
     DECLARE @QuickieStoreInstalled bit = CASE WHEN EXISTS (
@@ -186,15 +188,17 @@ BEGIN
         SampleText                nvarchar(200) NULL
     );
 
-    DECLARE @Command nvarchar(max),
-            @WindowStartSql nvarchar(40) = COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowStart, 127), ''''), N'NULL'),
-            @WindowEndSql   nvarchar(40) = QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), '''');
+    DECLARE @Command           nvarchar(max),
+            @WindowStartSql    nvarchar(40) = COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowStart, 127), ''''), N'NULL'),
+            @WindowEndSql      nvarchar(40) = QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''),
+            @DeltaWindowEndSql nvarchar(40) = COALESCE(QUOTENAME(CONVERT(nvarchar(35), @DeltaWindowEnd, 127), ''''), N'NULL');
 
     SET @Command = N'
 SET NOCOUNT ON;
 DECLARE @CurrentDatabase sysname = DB_NAME(),
         @WindowStart datetimeoffset(7) = ' + @WindowStartSql + N',
         @WindowEnd datetimeoffset(7) = ' + @WindowEndSql + N',
+        @DeltaWindowEnd datetimeoffset(7) = ' + @DeltaWindowEndSql + N',
         @CompareOffsetHours int = ' + CONVERT(nvarchar(12), @CompareOffsetHours) + N',
         @Top int = ' + CONVERT(nvarchar(12), @Top) + N',
         @Debug bit = ' + CONVERT(nvarchar(1), @Debug) + N';
@@ -213,7 +217,7 @@ BEGIN
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopCpuDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
-        @WindowEnd          = @WindowEnd,
+        @WindowEnd          = @DeltaWindowEnd,
         @CompareOffsetHours = @CompareOffsetHours,
         @Top                = @Top,
         @Debug              = @Debug;
@@ -230,7 +234,7 @@ BEGIN
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopIoDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
-        @WindowEnd          = @WindowEnd,
+        @WindowEnd          = @DeltaWindowEnd,
         @CompareOffsetHours = @CompareOffsetHours,
         @Top                = @Top,
         @Debug              = @Debug;
@@ -247,7 +251,7 @@ BEGIN
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopExecutionDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
-        @WindowEnd          = @WindowEnd,
+        @WindowEnd          = @DeltaWindowEnd,
         @CompareOffsetHours = @CompareOffsetHours,
         @Top                = @Top,
         @Debug              = @Debug;

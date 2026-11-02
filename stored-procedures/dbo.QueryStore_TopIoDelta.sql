@@ -13,11 +13,13 @@ DESCRIPTION
     query with the same-length window @CompareOffsetHours earlier. The total includes logical
     reads and writes; these are also returned separately, along with physical reads. I/O per
     execution helps distinguish changed query efficiency from increased execution volume.
+    Only intervals wholly contained in either window are included.
 
 PARAMETERS
 * @DatabaseName - Target database name. The database must have Query Store enabled.
 * @WindowStart - Start of the current window. Defaults to one hour before @WindowEnd.
-* @WindowEnd - End of the current window. Defaults to the current time.
+* @WindowEnd - End of the current window. Defaults to the target database's current interval start.
+  If no interval is active, uses the latest completed interval end.
 * @CompareOffsetHours - Hours to shift the comparison window back. Defaults to 168 (one week).
   Set it at least as large as the window length to avoid overlapping windows.
 * @Top - Maximum number of rows to return. Defaults to 25.
@@ -53,13 +55,24 @@ BEGIN
     RETURN;
 END;
 
-SET @WindowEnd   = ISNULL(@WindowEnd, SYSDATETIMEOFFSET());
+DECLARE @Exec nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql',
+        @Sql  nvarchar(max);
+
+IF @WindowEnd IS NULL
+BEGIN
+    -- Stop at the active interval's start, or the latest completed end if no interval is active.
+    EXEC @Exec
+        N'DECLARE @AsOf datetimeoffset(7) = SYSDATETIMEOFFSET();
+          SELECT @WindowEnd = MAX(CASE WHEN rsi.end_time > @AsOf THEN rsi.start_time ELSE rsi.end_time END)
+          FROM sys.query_store_runtime_stats_interval AS rsi
+          WHERE rsi.start_time <= @AsOf;',
+        N'@WindowEnd datetimeoffset(7) OUTPUT',
+        @WindowEnd = @WindowEnd OUTPUT;
+END;
 SET @WindowStart = ISNULL(@WindowStart, DATEADD(HOUR, -1, @WindowEnd));
 
 DECLARE @BaseStart datetimeoffset(7) = DATEADD(HOUR, -@CompareOffsetHours, @WindowStart),
-        @BaseEnd   datetimeoffset(7) = DATEADD(HOUR, -@CompareOffsetHours, @WindowEnd),
-        @Exec      nvarchar(400)     = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql',
-        @Sql       nvarchar(max);
+        @BaseEnd   datetimeoffset(7) = DATEADD(HOUR, -@CompareOffsetHours, @WindowEnd);
 
 SET @Sql = N'
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
@@ -68,7 +81,7 @@ SET LOCK_TIMEOUT 1000;
 WITH WindowStats AS (
     SELECT
         q.query_hash,
-        IsNow         = CASE WHEN rsi.end_time > @WindowStart THEN 1 ELSE 0 END,
+        IsNow         = CASE WHEN rsi.start_time >= @WindowStart AND rsi.end_time <= @WindowEnd THEN 1 ELSE 0 END,
         Execs         = SUM(rs.count_executions),
         LogicalReads  = SUM(rs.avg_logical_io_reads * rs.count_executions),
         LogicalWrites = SUM(rs.avg_logical_io_writes * rs.count_executions),
@@ -80,9 +93,9 @@ WITH WindowStats AS (
         ON p.plan_id = rs.plan_id
     JOIN sys.query_store_query AS q
         ON q.query_id = p.query_id
-    WHERE (rsi.end_time > @WindowStart AND rsi.start_time < @WindowEnd)
-       OR (rsi.end_time > @BaseStart   AND rsi.start_time < @BaseEnd)
-    GROUP BY q.query_hash, CASE WHEN rsi.end_time > @WindowStart THEN 1 ELSE 0 END
+    WHERE (rsi.start_time >= @WindowStart AND rsi.end_time <= @WindowEnd)
+       OR (rsi.start_time >= @BaseStart   AND rsi.end_time <= @BaseEnd)
+    GROUP BY q.query_hash, CASE WHEN rsi.start_time >= @WindowStart AND rsi.end_time <= @WindowEnd THEN 1 ELSE 0 END
 ),
 Pivoted AS (
     SELECT
