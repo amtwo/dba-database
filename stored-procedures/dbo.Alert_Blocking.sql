@@ -16,14 +16,14 @@ CREATED: 20141218
     Log leading blockers with email attempt status, or record HTML debug output.
     @Debug parameter controls whether to email blocking to @EmailRecipients or to output resultset.
     @EmailThreshold throttles queued email so that the server only submits an email every N minutes.
-    Set @EmailThreshold to 0 to disable email throttling; negative values are invalid.
+    Set @EmailThreshold to 0 to disable email throttling; NULL and negative values are invalid.
     An in-flight send claim expires after five minutes if its session does not update the status.
 
 PARAMETERS
 * @BlockingDurationThreshold - seconds - Alters on blocked sessions that have been waiting longer than this many seconds.
 * @BlockedSessionThreshold - Alert on blocking only when the number of blocked sessions is this number of higher.
 * @EmailRecipients   - delimited list of email addresses. Used for sending email alert.
-* @EmailThreshold    - minutes - Only send an email every this many minutes; 0 disables throttling.
+* @EmailThreshold    - minutes - Only send an email every this many minutes; 0 disables throttling; NULL and negative values are invalid.
 * @Debug             - Supress sending email & output a resultset instead
                           0 = Send email
                           1 = Suppress sending emails and suppress logging to dbo.Monitor_Blocking
@@ -66,7 +66,7 @@ BEGIN
     RETURN;
 END;
 
-IF @EmailThreshold < 0
+IF @EmailThreshold IS NULL OR @EmailThreshold < 0
 BEGIN
     RAISERROR('@EmailThreshold must be 0 or greater.',16,1);
     RETURN;
