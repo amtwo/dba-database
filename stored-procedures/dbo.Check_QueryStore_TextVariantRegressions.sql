@@ -31,8 +31,9 @@ PARAMETERS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @Command nvarchar(max) = N'EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TextVariantRegressions'
-        + N' @DatabaseName = DB_NAME()'
+    DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
+EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TextVariantRegressions'
+        + N' @DatabaseName = @DbName'
         + N', @VariantSince  = ' + QUOTENAME(CONVERT(nvarchar(35), @VariantSince, 127), '''')
         + N', @WindowEnd     = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''), N'NULL')
         + N', @BaselineStart = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @BaselineStart, 127), ''''), N'NULL')

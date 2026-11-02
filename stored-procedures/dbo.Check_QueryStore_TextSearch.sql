@@ -57,8 +57,9 @@ BEGIN
         RETURN;
     END;
 
-    DECLARE @Command nvarchar(max) = N'EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.sp_QuickieStore'
-        + N' @database_name = DB_NAME()'
+    DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
+EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.sp_QuickieStore'
+        + N' @database_name = @DbName'
         + N', @query_text_search = ' + CASE WHEN @SearchText IS NULL THEN N'NULL'
             ELSE N'N''' + REPLACE(@SearchText, N'''', N'''''') + N'''' END
         + N', @query_text_search_not = ' + CASE WHEN @SearchTextNot IS NULL THEN N'NULL'

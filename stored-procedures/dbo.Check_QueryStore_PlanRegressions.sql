@@ -25,8 +25,9 @@ PARAMETERS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @Command nvarchar(max) = N'EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_PlanRegressions'
-        + N' @DatabaseName = DB_NAME()'
+    DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
+EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_PlanRegressions'
+        + N' @DatabaseName = @DbName'
         + N', @WindowStart = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowStart, 127), ''''), N'NULL')
         + N', @WindowEnd   = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''), N'NULL')
         + N', @MinExecs    = ' + CONVERT(nvarchar(20), @MinExecs)
