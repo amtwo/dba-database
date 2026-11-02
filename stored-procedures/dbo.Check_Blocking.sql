@@ -341,16 +341,16 @@ JOIN (SELECT LeadingBlocker, COUNT(*) BlockedSpidCount FROM #Blocked GROUP BY Le
 
 UPDATE lb
 SET SessionInfo = (SELECT LeadingBlocker,
-                          LoginName, 
+                          LoginName = dbo.XmlSafeText_Get(LoginName),
                           TransactionCnt, 
-                          WaitResource = COALESCE(WaitDescription,WaitResource),
-                          HostName,
-                          DbName,
+                          WaitResource = dbo.XmlSafeText_Get(COALESCE(WaitDescription,WaitResource)),
+                          HostName = dbo.XmlSafeText_Get(HostName),
+                          DbName = dbo.XmlSafeText_Get(DbName),
                           LastRequest = CONVERT(varchar(20),LastRequestStart,20),
-                          ProgramName,
-                          InputBuffer,
-                          SqlStatement,
-                          SqlText
+                          ProgramName = dbo.XmlSafeText_Get(ProgramName),
+                          InputBuffer = dbo.XmlSafeText_Get(InputBuffer),
+                          SqlStatement = dbo.XmlSafeText_Get(SqlStatement),
+                          SqlText = dbo.XmlSafeText_Get(SqlText)
                     FROM #LeadingBlocker lb2 
                     WHERE lb.id = lb2.id 
                     FOR XML PATH ('LeadBlocker'))
@@ -375,17 +375,17 @@ FROM #Blocked b;
 */
 UPDATE b
 SET SessionInfo = (SELECT WaitingSpid,
-                          BlockingChain,
-                          LoginName, 
+                          BlockingChain = dbo.XmlSafeText_Get(BlockingChain),
+                          LoginName = dbo.XmlSafeText_Get(LoginName),
                           TransactionCnt, 
-                          WaitResource = COALESCE(WaitDescription,WaitResource),
-                          HostName,
-                          DbName,
+                          WaitResource = dbo.XmlSafeText_Get(COALESCE(WaitDescription,WaitResource)),
+                          HostName = dbo.XmlSafeText_Get(HostName),
+                          DbName = dbo.XmlSafeText_Get(DbName),
                           LastRequest = CONVERT(varchar(20),LastRequestStart,20),
-                          ProgramName,
-                          InputBuffer,
-                          SqlStatement,
-                          SqlText
+                          ProgramName = dbo.XmlSafeText_Get(ProgramName),
+                          InputBuffer = dbo.XmlSafeText_Get(InputBuffer),
+                          SqlStatement = dbo.XmlSafeText_Get(SqlStatement),
+                          SqlText = dbo.XmlSafeText_Get(SqlText)
                     FROM #Blocked b2 
                     WHERE b.id = b2.id 
                     FOR XML PATH ('BlockedSession'))
