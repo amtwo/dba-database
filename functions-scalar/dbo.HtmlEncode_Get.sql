@@ -16,7 +16,6 @@ SELECT dbo.HtmlEncode_Get(N'<b>not markup</b>');
 
 **************************************************************************************************
 MODIFICATIONS:
-    20261101 - AM2 - Add reusable HTML encoding for alert content.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE

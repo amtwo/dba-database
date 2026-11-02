@@ -17,7 +17,6 @@ FROM dbo.SqlAgentJobId_Get(N'SQLAgent - TSQL JobStep (Job 0x0123456789ABCDEF0123
 
 **************************************************************************************************
 MODIFICATIONS:
-    20261101 - AM2 - Share SQL Agent job ID validation across blocking reports.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE

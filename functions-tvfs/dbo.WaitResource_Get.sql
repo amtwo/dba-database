@@ -20,7 +20,6 @@ SELECT * FROM dbo.WaitResource_Get(N'PAGE: 5:1:104');
 
 **************************************************************************************************
 MODIFICATIONS:
-    20261101 - AM2 - Share blocking wait-resource parsing across blocking reports.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
