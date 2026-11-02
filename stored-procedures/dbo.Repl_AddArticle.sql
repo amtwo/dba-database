@@ -70,7 +70,7 @@ END
 --Check that the article is not already published 
  --If already published, don't error, just print the info.
 SET @sql = N'SELECT @OK = 0 
-            WHERE EXISTS (SELECT 1 FROM ' + @QuotedPubDbName + N'.sys.objects 
+            WHERE EXISTS (SELECT 1 FROM ' + @QuotedPubDbName + N'.sys.objects
                             WHERE name = @ArticleName AND is_published = 1);'
 EXEC sys.sp_executesql 
             @stmt = @sql, 
@@ -89,7 +89,7 @@ DECLARE @UpdateCommand nvarchar(255) = N'CALL ' + QUOTENAME(N'sp_MSupd_dbo' + @A
 DECLARE @DeleteCommand nvarchar(255) = N'CALL ' + QUOTENAME(N'sp_MSdel_dbo' + @ArticleName);
 
 
-SET @sql = N'EXEC ' + @QuotedPubDbName + N'.sys.sp_addarticle 
+SET @sql = N'EXEC ' + @QuotedPubDbName + N'.sys.sp_addarticle
             @publication                    = @PublicationName, 
             @article                        = @ArticleName, 
             @source_owner                   = N''dbo'', 
