@@ -1,4 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_FileSize'))
+﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_FileSize'))
     EXEC ('CREATE PROCEDURE dbo.Check_FileSize AS SELECT ''This is a stub''')
 GO
 
