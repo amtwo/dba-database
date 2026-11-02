@@ -238,6 +238,7 @@ CROSS APPLY dbo.SqlAgentJobId_Get(b.ProgramName) jobId
 WHERE jobId.JobIdHex IS NOT NULL;
 
 --Decode wait resources.
+-- Keep each description tied to its blocked row; one session may have multiple wait resources.
 DECLARE wait_cur CURSOR LOCAL FAST_FORWARD FOR
     SELECT b.ID, b.WaitingSpid, resource.RawResource, resource.ResourceType, resource.DatabaseName,
            resource.ObjectId, resource.SchemaName, resource.ObjectName, resource.IndexId, resource.HobtId,
