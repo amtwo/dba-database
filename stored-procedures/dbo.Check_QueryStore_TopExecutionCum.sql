@@ -25,12 +25,15 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
-EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopExecutionCum'
+IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @DbName AND is_query_store_on = 1)
+BEGIN
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopExecutionCum'
         + N' @DatabaseName = @DbName'
         + N', @WindowStart = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowStart, 127), ''''), N'NULL')
         + N', @WindowEnd   = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''), N'NULL')
         + N', @Top         = ' + CONVERT(nvarchar(12), @Top)
-        + N', @Debug       = ' + CONVERT(nvarchar(1), @Debug) + N';';
+        + N', @Debug       = ' + CONVERT(nvarchar(1), @Debug) + N';
+END;';
 
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;

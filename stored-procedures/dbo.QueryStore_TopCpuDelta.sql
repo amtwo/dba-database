@@ -94,6 +94,7 @@ Pivoted AS (
     GROUP BY ws.query_hash
 )
 SELECT TOP (@Top)
+    DatabaseName = DB_NAME(),
     pv.query_hash,
     pv.BaseExecs,
     pv.NowExecs,

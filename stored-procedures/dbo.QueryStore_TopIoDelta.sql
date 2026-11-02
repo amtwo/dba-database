@@ -106,6 +106,7 @@ Totals AS (
     FROM Pivoted AS pv
 )
 SELECT TOP (@Top)
+    DatabaseName = DB_NAME(),
     t.query_hash,
     t.BaseExecs,
     t.NowExecs,

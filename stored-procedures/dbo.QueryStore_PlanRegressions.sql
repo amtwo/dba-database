@@ -130,6 +130,7 @@ Ranked AS (
     FROM PlanStats AS ps
 )
 SELECT
+    DatabaseName = DB_NAME(),
     l.query_hash,
     l.query_id,
     ObjectName        = OBJECT_SCHEMA_NAME(l.object_id) + N''.'' + OBJECT_NAME(l.object_id),

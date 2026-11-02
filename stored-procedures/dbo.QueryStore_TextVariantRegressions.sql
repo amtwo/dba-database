@@ -182,6 +182,7 @@ HAVING SUM(rs.count_executions) >= @MinExecs;
     WHERE a.IsNewVariant = 0
 )
 SELECT
+    DatabaseName = DB_NAME(),
     NewQueryId         = n.query_id,
     NewQueryHash       = n.query_hash,
     ObjectName         = OBJECT_SCHEMA_NAME(n.object_id) + N''.'' + OBJECT_NAME(n.object_id),

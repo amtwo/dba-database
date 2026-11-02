@@ -201,16 +201,15 @@ DECLARE @CurrentDatabase sysname = DB_NAME(),
 
 IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @CurrentDatabase AND is_query_store_on = 1)
 BEGIN
-    INSERT INTO #CpuCum (query_hash, Execs, CpuSec, CpuMsPerExec, LogicalIoPages, LogicalIoPagesPerExec, SampleQueryId, ObjectName, SampleText)
+    INSERT INTO #CpuCum (DatabaseName, query_hash, Execs, CpuSec, CpuMsPerExec, LogicalIoPages, LogicalIoPagesPerExec, SampleQueryId, ObjectName, SampleText)
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopCpuCum
         @DatabaseName = @CurrentDatabase,
         @WindowStart  = @WindowStart,
         @WindowEnd    = @WindowEnd,
         @Top          = @Top,
         @Debug        = @Debug;
-    UPDATE #CpuCum SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
-    INSERT INTO #CpuDelta (query_hash, BaseExecs, NowExecs, BaseCpuSec, NowCpuSec, DeltaCpuSec, NowCpuMsPerExec, BaseCpuMsPerExec, CpuPerExecRatio, ExecRatio, IsNewQuery, SampleQueryId, ObjectName, SampleText)
+    INSERT INTO #CpuDelta (DatabaseName, query_hash, BaseExecs, NowExecs, BaseCpuSec, NowCpuSec, DeltaCpuSec, NowCpuMsPerExec, BaseCpuMsPerExec, CpuPerExecRatio, ExecRatio, IsNewQuery, SampleQueryId, ObjectName, SampleText)
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopCpuDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
@@ -218,18 +217,16 @@ BEGIN
         @CompareOffsetHours = @CompareOffsetHours,
         @Top                = @Top,
         @Debug              = @Debug;
-    UPDATE #CpuDelta SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
-    INSERT INTO #IoCum (query_hash, Execs, LogicalIoPages, LogicalReads, LogicalWrites, PhysicalReads, LogicalIoPagesPerExec, LogicalReadsPerExec, LogicalWritesPerExec, SampleQueryId, ObjectName, SampleText)
+    INSERT INTO #IoCum (DatabaseName, query_hash, Execs, LogicalIoPages, LogicalReads, LogicalWrites, PhysicalReads, LogicalIoPagesPerExec, LogicalReadsPerExec, LogicalWritesPerExec, SampleQueryId, ObjectName, SampleText)
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopIoCum
         @DatabaseName = @CurrentDatabase,
         @WindowStart  = @WindowStart,
         @WindowEnd    = @WindowEnd,
         @Top          = @Top,
         @Debug        = @Debug;
-    UPDATE #IoCum SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
-    INSERT INTO #IoDelta (query_hash, BaseExecs, NowExecs, BaseLogicalIoPages, NowLogicalIoPages, DeltaLogicalIoPages, BaseLogicalReads, NowLogicalReads, DeltaLogicalReads, BaseLogicalWrites, NowLogicalWrites, DeltaLogicalWrites, BasePhysicalReads, NowPhysicalReads, DeltaPhysicalReads, NowLogicalIoPagesPerExec, BaseLogicalIoPagesPerExec, IoPerExecRatio, ExecRatio, IsNewQuery, SampleQueryId, ObjectName, SampleText)
+    INSERT INTO #IoDelta (DatabaseName, query_hash, BaseExecs, NowExecs, BaseLogicalIoPages, NowLogicalIoPages, DeltaLogicalIoPages, BaseLogicalReads, NowLogicalReads, DeltaLogicalReads, BaseLogicalWrites, NowLogicalWrites, DeltaLogicalWrites, BasePhysicalReads, NowPhysicalReads, DeltaPhysicalReads, NowLogicalIoPagesPerExec, BaseLogicalIoPagesPerExec, IoPerExecRatio, ExecRatio, IsNewQuery, SampleQueryId, ObjectName, SampleText)
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopIoDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
@@ -237,18 +234,16 @@ BEGIN
         @CompareOffsetHours = @CompareOffsetHours,
         @Top                = @Top,
         @Debug              = @Debug;
-    UPDATE #IoDelta SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
-    INSERT INTO #ExecutionCum (query_hash, Execs, CpuSec, LogicalIoPages, CpuMsPerExec, LogicalIoPagesPerExec, SampleQueryId, ObjectName, SampleText)
+    INSERT INTO #ExecutionCum (DatabaseName, query_hash, Execs, CpuSec, LogicalIoPages, CpuMsPerExec, LogicalIoPagesPerExec, SampleQueryId, ObjectName, SampleText)
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopExecutionCum
         @DatabaseName = @CurrentDatabase,
         @WindowStart  = @WindowStart,
         @WindowEnd    = @WindowEnd,
         @Top          = @Top,
         @Debug        = @Debug;
-    UPDATE #ExecutionCum SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 
-    INSERT INTO #ExecutionDelta (query_hash, BaseExecs, NowExecs, DeltaExecs, ExecRatio, IsNewQuery, NowCpuMsPerExec, BaseCpuMsPerExec, CpuPerExecRatio, NowLogicalIoPagesPerExec, BaseLogicalIoPagesPerExec, IoPerExecRatio, SampleQueryId, ObjectName, SampleText)
+    INSERT INTO #ExecutionDelta (DatabaseName, query_hash, BaseExecs, NowExecs, DeltaExecs, ExecRatio, IsNewQuery, NowCpuMsPerExec, BaseCpuMsPerExec, CpuPerExecRatio, NowLogicalIoPagesPerExec, BaseLogicalIoPagesPerExec, IoPerExecRatio, SampleQueryId, ObjectName, SampleText)
     EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopExecutionDelta
         @DatabaseName       = @CurrentDatabase,
         @WindowStart        = @WindowStart,
@@ -256,7 +251,6 @@ BEGIN
         @CompareOffsetHours = @CompareOffsetHours,
         @Top                = @Top,
         @Debug              = @Debug;
-    UPDATE #ExecutionDelta SET DatabaseName = @CurrentDatabase WHERE DatabaseName IS NULL;
 END;';
 
     IF @Debug = 1
