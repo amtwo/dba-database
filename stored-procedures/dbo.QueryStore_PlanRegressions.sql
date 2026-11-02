@@ -141,7 +141,7 @@ SELECT
     ExcessCpuSec      = CONVERT(decimal(18, 1), (l.CpuMsPerExec - b.CpuMsPerExec) * l.Execs / 1000.0),
     AnyPlanForced     = CASE WHEN EXISTS (SELECT 1 FROM sys.query_store_plan AS fp WHERE fp.query_id = l.query_id AND fp.is_forced_plan = 1) THEN 1 ELSE 0 END,
     HintText          = ' + CASE WHEN @SupportsQueryStoreHints = 1
-        THEN N'(SELECT TOP (1) n.query_hint_text FROM sys.query_store_query_hints AS n WHERE n.query_id = l.query_id)'
+        THEN N'(SELECT STRING_AGG(n.query_hint_text, N''; '') FROM sys.query_store_query_hints AS n WHERE n.query_id = l.query_id)'
         ELSE N'CONVERT(nvarchar(max), NULL)' END + N',
     ForceSql          = N''EXEC sys.sp_query_store_force_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)
                         + N'', @plan_id = '' + CONVERT(nvarchar(20), b.plan_id) + N'';'',
