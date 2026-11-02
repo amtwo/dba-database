@@ -15,6 +15,7 @@ PARAMETERS
 
 EXAMPLES:
 SELECT * FROM dbo.WaitResource_Get(N'TAB: 5:261575970:1');
+SELECT * FROM dbo.WaitResource_Get(N'OBJECT: 5:261575970:0');
 SELECT * FROM dbo.WaitResource_Get(N'PAGE: 5:1:104');
 
 **************************************************************************************************
@@ -65,13 +66,19 @@ RETURN
         SELECT
             NormalizedResource,
             ResourceType,
-            DatabaseId = TRY_CONVERT(int, PARSENAME(ResourceParts,
-                CASE WHEN ResourceType IN ('KEY', 'OBJECT') THEN 2
-                     WHEN ResourceType = 'TAB' AND PARSENAME(ResourceParts, 3) IS NULL THEN 2
-                     WHEN ResourceType = 'RID' THEN 4
-                     ELSE 3
-                END)),
-            ObjectId = CASE WHEN ResourceType = 'OBJECT' THEN TRY_CONVERT(int, PARSENAME(ResourceParts, 1))
+            DatabaseId = TRY_CONVERT(int, CASE
+                WHEN ResourceType = 'OBJECT' AND PARSENAME(ResourceParts, 3) IS NOT NULL
+                    THEN PARSENAME(ResourceParts, 3)
+                WHEN ResourceType IN ('KEY', 'OBJECT') THEN PARSENAME(ResourceParts, 2)
+                WHEN ResourceType = 'TAB' AND PARSENAME(ResourceParts, 3) IS NULL
+                    THEN PARSENAME(ResourceParts, 2)
+                WHEN ResourceType = 'RID' THEN PARSENAME(ResourceParts, 4)
+                ELSE PARSENAME(ResourceParts, 3)
+            END),
+            ObjectId = CASE WHEN ResourceType = 'OBJECT' THEN TRY_CONVERT(int, CASE
+                                WHEN PARSENAME(ResourceParts, 3) IS NOT NULL THEN PARSENAME(ResourceParts, 2)
+                                ELSE PARSENAME(ResourceParts, 1)
+                            END)
                             WHEN ResourceType = 'TAB' THEN TRY_CONVERT(int, CASE
                                 WHEN PARSENAME(ResourceParts, 3) IS NULL THEN PARSENAME(ResourceParts, 1)
                                 ELSE PARSENAME(ResourceParts, 2)
