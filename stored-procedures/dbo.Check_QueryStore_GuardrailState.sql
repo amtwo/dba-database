@@ -22,8 +22,9 @@ PARAMETERS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @Command nvarchar(max) = N'EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_GuardrailState'
-        + N' @DatabaseName = DB_NAME()'
+    DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
+EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_GuardrailState'
+        + N' @DatabaseName = @DbName'
         + N', @QueryHashes = ' + COALESCE(N'''' + REPLACE(@QueryHashes, N'''', N'''''') + N'''', N'NULL')
         + N', @ActiveDays  = ' + CONVERT(nvarchar(12), @ActiveDays)
         + N', @Debug       = ' + CONVERT(nvarchar(1), @Debug) + N';';
