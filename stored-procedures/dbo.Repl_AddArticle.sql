@@ -30,6 +30,25 @@ SET NOCOUNT ON
 ---------------------
 DECLARE @sql nvarchar(max);
 DECLARE @OK bit = 1;
+DECLARE @QuotedPubDbName nvarchar(258) = QUOTENAME(@PubDbName);
+
+IF @QuotedPubDbName IS NULL OR DB_ID(@PubDbName) IS NULL
+BEGIN
+    RAISERROR ('The specified publication database is invalid or unavailable.', 16, 1);
+    RETURN -1;
+END;
+
+IF DATALENGTH(@PublicationName) > 256 OR DATALENGTH(@ArticleName) > 256
+BEGIN
+    RAISERROR ('Publication and article names must be 128 characters or fewer.', 16, 1);
+    RETURN -1;
+END;
+
+IF DATALENGTH(N'sp_MSins_dbo' + @ArticleName) > 256
+BEGIN
+    RAISERROR ('The article name is too long for its generated replication procedures.', 16, 1);
+    RETURN -1;
+END;
 
 IF @SchemaOption IS NULL
 BEGIN
@@ -40,7 +59,7 @@ END;
 
 --Check to see if article exists in Published database
 SET @sql = N'SELECT @OK = 0 
-            WHERE NOT EXISTS (SELECT 1 FROM [' + @PubDbName + N'].sys.objects WHERE name = @ArticleName);'
+            WHERE NOT EXISTS (SELECT 1 FROM ' + @QuotedPubDbName + N'.sys.objects WHERE name = @ArticleName);'
 EXEC sys.sp_executesql @sql, N'@ArticleName sysname, @OK bit OUTPUT', @ArticleName = @ArticleName, @OK = @OK OUTPUT;
 IF @OK = 0
 BEGIN
@@ -51,7 +70,7 @@ END
 --Check that the article is not already published 
  --If already published, don't error, just print the info.
 SET @sql = N'SELECT @OK = 0 
-            WHERE EXISTS (SELECT 1 FROM [' + @PubDbName + N'].sys.objects 
+            WHERE EXISTS (SELECT 1 FROM ' + @QuotedPubDbName + N'.sys.objects
                             WHERE name = @ArticleName AND is_published = 1);'
 EXEC sys.sp_executesql 
             @stmt = @sql, 
@@ -65,12 +84,12 @@ BEGIN
 END
 
 --and now call the system sproc to actually add the article to publication
-DECLARE @InsertCommand nvarchar(128) = N'CALL sp_MSins_dbo' + @ArticleName;
-DECLARE @UpdateCommand nvarchar(128) = N'CALL sp_MSupd_dbo' + @ArticleName;
-DECLARE @DeleteCommand nvarchar(128) = N'CALL sp_MSdel_dbo' + @ArticleName;
+DECLARE @InsertCommand nvarchar(255) = N'CALL ' + QUOTENAME(N'sp_MSins_dbo' + @ArticleName);
+DECLARE @UpdateCommand nvarchar(255) = N'CALL ' + QUOTENAME(N'sp_MSupd_dbo' + @ArticleName);
+DECLARE @DeleteCommand nvarchar(255) = N'CALL ' + QUOTENAME(N'sp_MSdel_dbo' + @ArticleName);
 
 
-SET @sql = N'EXEC ' + QUOTENAME(@PubDbName) + N'.sys.sp_addarticle 
+SET @sql = N'EXEC ' + @QuotedPubDbName + N'.sys.sp_addarticle
             @publication                    = @PublicationName, 
             @article                        = @ArticleName, 
             @source_owner                   = N''dbo'', 
@@ -90,12 +109,12 @@ SET @sql = N'EXEC ' + QUOTENAME(@PubDbName) + N'.sys.sp_addarticle
 
 IF @Debug = 0
     EXEC sys.sp_executesql @stmt = @sql,
-                @params             = N'@PublicationName nvarchar(128),
-                                        @ArticleName     nvarchar(128),
+                @params             = N'@PublicationName nvarchar(256),
+                                        @ArticleName     nvarchar(256),
                                         @SchemaOption    binary(8),
-                                        @InsertCommand   nvarchar(128),
-                                        @UpdateCommand   nvarchar(128),
-                                        @DeleteCommand   nvarchar(128)',
+                                        @InsertCommand   nvarchar(255),
+                                        @UpdateCommand   nvarchar(255),
+                                        @DeleteCommand   nvarchar(255)',
                 @PublicationName    = @PublicationName,
                 @ArticleName        = @ArticleName,
                 @SchemaOption       = @SchemaOption,
