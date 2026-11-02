@@ -51,6 +51,12 @@ MODIFICATIONS:
 *************************************************************************************************/
 SET NOCOUNT ON;
 
+IF @ChunkSize IS NULL OR @ChunkSize <= 0
+BEGIN
+    RAISERROR('@ChunkSize must be greater than zero.', 16, 1);
+    RETURN;
+END;
+
 DECLARE @MaxID bigint;
 DECLARE @ChunkID bigint;
 DECLARE @Sql nvarchar(max);
