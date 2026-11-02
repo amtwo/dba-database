@@ -349,7 +349,9 @@ UPDATE b
 SET LeadingBlocker = bc.LeadingBlocker,
     BlockingChain = bc.BlockingChain
 FROM #Blocked b
-JOIN BlockingChain bc ON b.WaitingSpid = bc.Spid;
+JOIN BlockingChain bc ON b.WaitingSpid = bc.Spid
+-- Allow the full smallint session-ID range while retaining a guard against cycles.
+OPTION (MAXRECURSION 32767);
 
 -- Populate BlockedSpidCount for #LeadingBlocker
 UPDATE lb
