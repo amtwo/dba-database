@@ -44,6 +44,7 @@ MODIFICATIONS:
     20171210 - AM2 - Add Debug Mode = 2 to return the Email Body as a chunk of HTML instead of emailing it.
     20261101 - Cody - Hardened blocking alert validation and metadata handling.
     20261101 - Cody - Decode TAB wait resources to object and index names.
+    20261101 - Cody - Use shared wait-resource and SQL Agent job ID functions and encode HTML data.
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
@@ -66,12 +67,21 @@ END;
 DECLARE @Id int = 1,
         @Spid int = 0,
         @JobIdHex nvarchar(34),
-        @JobIdBinary binary(16),
         @JobName nvarchar(256),
         @WaitResource nvarchar(256),
+        @ResourceType varchar(8),
         @DbName nvarchar(256),
+        @ObjectId int,
+        @SchemaName sysname,
         @ObjectName nvarchar(256),
         @IndexName nvarchar(256),
+        @IndexId int,
+        @HobtId bigint,
+        @FileId int,
+        @FileName sysname,
+        @PageId bigint,
+        @SlotId int,
+        @BlockedRowId int,
         @Sql nvarchar(max),
         @EmailFromDomain varchar(max),
         @EmailFrom varchar(max),
@@ -223,28 +233,20 @@ BEGIN
 END;
 
 --Convert Hex job_ids for SQL Agent jobs to names.
-WHILE EXISTS(SELECT 1 FROM #Blocked WHERE ProgramName LIKE 'SQLAgent - TSQL JobStep (Job 0x%')
+WHILE EXISTS (
+    SELECT 1
+    FROM #Blocked b
+    CROSS APPLY dbo.SqlAgentJobId_Get(b.ProgramName) jobId
+    WHERE jobId.JobIdHex IS NOT NULL
+)
 BEGIN
-    SELECT @JobIdHex = '', @JobName = '';
-
-    SELECT TOP 1 @ID = ID, 
-            @JobIdHex =  SUBSTRING(ProgramName,30,34)
-    FROM #Blocked
-    WHERE ProgramName LIKE 'SQLAgent - TSQL JobStep (Job 0x%';
-
-    SET @JobIdBinary = TRY_CONVERT(binary(16), @JobIdHex, 1);
-    SET @JobName = NULL;
-
-    IF LEN(@JobIdHex) = 34
-        AND LEFT(@JobIdHex,2) = N'0x'
-        AND @JobIdBinary IS NOT NULL
-    BEGIN
-        SELECT @JobName = name
-        FROM msdb.dbo.sysjobs
-        WHERE CONVERT(binary(16),job_id) = @JobIdBinary;
-    END;
-
-    SET @JobName = COALESCE(@JobName,N'Unknown Job');
+    SELECT TOP (1)
+        @Id = b.ID,
+        @JobIdHex = jobId.JobIdHex,
+        @JobName = jobId.JobName
+    FROM #Blocked b
+    CROSS APPLY dbo.SqlAgentJobId_Get(b.ProgramName) jobId
+    WHERE jobId.JobIdHex IS NOT NULL;
 
     UPDATE b
     SET ProgramName = LEFT(REPLACE(ProgramName,@JobIdHex,@JobName),128)
@@ -252,102 +254,85 @@ BEGIN
     WHERE ID = @Id;
 END;
 
---Decypher wait resources.
-DECLARE wait_cur CURSOR FOR
-    SELECT WaitingSpid, WaitResource FROM #Blocked WHERE WaitResource <> '';
+--Decode wait resources.
+DECLARE wait_cur CURSOR LOCAL FAST_FORWARD FOR
+    SELECT b.ID, b.WaitingSpid, resource.RawResource, resource.ResourceType, resource.DatabaseName,
+           resource.ObjectId, resource.SchemaName, resource.ObjectName, resource.IndexId, resource.HobtId,
+           resource.FileId, resource.FileName, resource.PageId, resource.SlotId
+    FROM #Blocked b
+    CROSS APPLY dbo.WaitResource_Get(b.WaitResource) resource
+    WHERE b.WaitResource <> '';
 
 OPEN wait_cur;
-FETCH NEXT FROM wait_cur INTO @Spid, @WaitResource;
+FETCH NEXT FROM wait_cur INTO @BlockedRowId, @Spid, @WaitResource, @ResourceType, @DbName,
+    @ObjectId, @SchemaName, @ObjectName, @IndexId, @HobtId, @FileId, @FileName, @PageId, @SlotId;
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    IF @WaitResource LIKE 'KEY%'
+    SET @IndexName = NULL;
+
+    IF @ResourceType = 'KEY'
     BEGIN
-        --Decypher DB portion of wait resource
-        SET @WaitResource = LTRIM(REPLACE(@WaitResource,'KEY:',''));
-        SET @DbName = db_name(SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource)));
-        --now get the object name
-        SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256);
-        SELECT @Sql = 'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + ''.'' + o.name, @IndexName = i.name ' +
-            'FROM ' + QUOTENAME(@DbName) + '.sys.partitions p ' +
-            'JOIN ' + QUOTENAME(@DbName) + '.sys.objects o ON p.OBJECT_ID = o.OBJECT_ID ' +
-            'JOIN ' + QUOTENAME(@DbName) + '.sys.indexes i ON p.OBJECT_ID = i.OBJECT_ID  AND p.index_id = i.index_id ' +
-            'WHERE p.hobt_id = SUBSTRING(@WaitResource,0,CHARINDEX('' '',@WaitResource))'
-        EXEC sp_executesql @sql,N'@WaitResource nvarchar(256),@ObjectName nvarchar(256) OUT,@IndexName nvarchar(256) OUT',
-                @WaitResource = @WaitResource, @ObjectName = @ObjectName OUT, @IndexName = @IndexName OUT
-        --now populate the WaitDescription column
-        UPDATE b
-        SET WaitDescription = 'KEY WAIT: ' + @DbName + '.' + @ObjectName + ' (' + COALESCE(@IndexName,'') + ')'
-        FROM #Blocked b
-        WHERE WaitingSpid = @Spid;
-    END;
-    ELSE IF @WaitResource LIKE 'OBJECT%'
-    BEGIN
-        --Decypher DB portion of wait resource
-        SET @WaitResource = LTRIM(REPLACE(@WaitResource,'OBJECT:',''));
-        SET @DbName = db_name(SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource)));
-        --now get the object name
-        SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256);
-        SET @Sql = 'SELECT @ObjectName = schema_name(schema_id) + ''.'' + name FROM ' + QUOTENAME(@DbName) + '.sys.objects WHERE object_id = SUBSTRING(@WaitResource,0,CHARINDEX('':'',@WaitResource))';
-        EXEC sp_executesql @sql,N'@WaitResource nvarchar(256),@ObjectName nvarchar(256) OUT',@WaitResource = @WaitResource, @ObjectName = @ObjectName OUT;
-        --Now populate the WaitDescription column
-        UPDATE b
-        SET WaitDescription = 'OBJECT WAIT: ' + @DbName + '.' + @ObjectName
-        FROM #Blocked b
-        WHERE WaitingSpid = @Spid;
-    END;
-    ELSE IF @WaitResource LIKE 'TAB:%'
-    BEGIN
-        --Decypher the database, object, and index portions of a table wait resource
-        SET @WaitResource = LTRIM(REPLACE(@WaitResource,'TAB:',''));
-        SET @DbName = DB_NAME(TRY_CONVERT(int, SUBSTRING(@WaitResource, 1, CHARINDEX(':', @WaitResource) - 1)));
-        SET @WaitResource = SUBSTRING(@WaitResource, CHARINDEX(':', @WaitResource) + 1, 256);
         SET @ObjectName = NULL;
-        SET @IndexName = NULL;
-        SET @Sql = 'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + ''.'' + o.name, @IndexName = i.name ' +
-            'FROM ' + QUOTENAME(@DbName) + '.sys.objects o ' +
-            'LEFT JOIN ' + QUOTENAME(@DbName) + '.sys.indexes i ON o.object_id = i.object_id ' +
-            'AND i.index_id = TRY_CONVERT(int, SUBSTRING(@WaitResource, CHARINDEX('':'', @WaitResource) + 1, 256)) ' +
-            'WHERE o.object_id = TRY_CONVERT(int, SUBSTRING(@WaitResource, 1, CHARINDEX('':'', @WaitResource) - 1))';
-        EXEC sp_executesql @Sql,
-            N'@WaitResource nvarchar(256), @ObjectName nvarchar(256) OUT, @IndexName nvarchar(256) OUT',
-            @WaitResource = @WaitResource, @ObjectName = @ObjectName OUT, @IndexName = @IndexName OUT;
-        --Now populate the WaitDescription column
+        SET @Sql = N'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + N''.'' + o.name, @IndexName = i.name ' +
+            N'FROM ' + QUOTENAME(@DbName) + N'.sys.partitions p ' +
+            N'JOIN ' + QUOTENAME(@DbName) + N'.sys.objects o ON p.object_id = o.object_id ' +
+            N'JOIN ' + QUOTENAME(@DbName) + N'.sys.indexes i ON p.object_id = i.object_id AND p.index_id = i.index_id ' +
+            N'WHERE p.hobt_id = @HobtId';
+        EXEC sys.sp_executesql @Sql,
+            N'@HobtId bigint, @ObjectName nvarchar(256) OUTPUT, @IndexName nvarchar(256) OUTPUT',
+            @HobtId = @HobtId, @ObjectName = @ObjectName OUTPUT, @IndexName = @IndexName OUTPUT;
+
         UPDATE b
-        SET WaitDescription = 'TAB WAIT: ' + @DbName + '.' + @ObjectName +
-            CASE WHEN @IndexName IS NULL THEN '' ELSE ' (Index: ' + @IndexName + ')' END
+        SET WaitDescription = COALESCE('KEY WAIT: ' + @DbName + '.' + @ObjectName + ' (' + COALESCE(@IndexName, '') + ')', @WaitResource)
         FROM #Blocked b
-        WHERE WaitingSpid = @Spid;
+        WHERE b.ID = @BlockedRowId;
     END;
-    ELSE IF (@WaitResource LIKE 'PAGE%' OR @WaitResource LIKE 'RID%')
+    ELSE IF @ResourceType = 'OBJECT'
     BEGIN
-        --Decypher DB portion of wait resource
-        SELECT @WaitResource = LTRIM(REPLACE(@WaitResource,'PAGE:',''));
-        SELECT @WaitResource = LTRIM(REPLACE(@WaitResource,'RID:',''));
-        SET @DbName = db_name(SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource)));
-        --now get the file name
-        SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256)
-        SELECT @ObjectName = name 
-        FROM sys.master_files
-        WHERE database_id = db_id(@DbName)
-        AND file_id = SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource));
-        --Now populate the WaitDescription column
-        SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256)
-        IF @WaitResource LIKE '%:%'
+        UPDATE b
+        SET WaitDescription = COALESCE('OBJECT WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName, @WaitResource)
+        FROM #Blocked b
+        WHERE b.ID = @BlockedRowId;
+    END;
+    ELSE IF @ResourceType = 'TAB'
+    BEGIN
+        SET @Sql = N'SELECT @IndexName = i.name FROM ' + QUOTENAME(@DbName) +
+            N'.sys.indexes i WHERE i.object_id = @ObjectId AND i.index_id = @IndexId';
+        EXEC sys.sp_executesql @Sql,
+            N'@ObjectId int, @IndexId int, @IndexName nvarchar(256) OUTPUT',
+            @ObjectId = @ObjectId, @IndexId = @IndexId, @IndexName = @IndexName OUTPUT;
+
+        UPDATE b
+        SET WaitDescription = COALESCE('TAB WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName +
+            CASE WHEN @IndexId IS NULL OR @IndexId = 0 THEN ''
+                 WHEN @IndexName IS NOT NULL THEN ' (Index: ' + @IndexName + ')'
+                 ELSE ' (Index ID: ' + CONVERT(varchar(11), @IndexId) + ')'
+            END, @WaitResource)
+        FROM #Blocked b
+        WHERE b.ID = @BlockedRowId;
+    END;
+    ELSE IF @ResourceType IN ('PAGE', 'RID')
+    BEGIN
+        IF @ResourceType = 'RID'
         BEGIN
             UPDATE b
-            SET WaitDescription = 'ROW WAIT: ' + @DbName + ' File: ' + @ObjectName + ' Page_id/Slot: ' + @WaitResource
+            SET WaitDescription = COALESCE('ROW WAIT: ' + @DbName + ' File: ' + @FileName +
+                ' Page_id/Slot: ' + CONVERT(varchar(20), @PageId) + ':' + CONVERT(varchar(11), @SlotId), @WaitResource)
             FROM #Blocked b
-            WHERE WaitingSpid = @Spid;
+            WHERE b.ID = @BlockedRowId;
         END;
         ELSE
         BEGIN
             UPDATE b
-            SET WaitDescription = 'PAGE WAIT: ' + @DbName + ' File: ' + @ObjectName + ' Page_id: ' + @WaitResource
+            SET WaitDescription = COALESCE('PAGE WAIT: ' + @DbName + ' File: ' + @FileName +
+                ' Page_id: ' + CONVERT(varchar(20), @PageId), @WaitResource)
             FROM #Blocked b
-            WHERE WaitingSpid = @Spid;
+            WHERE b.ID = @BlockedRowId;
         END;
     END;
-    FETCH NEXT FROM wait_cur INTO @Spid, @WaitResource;
+
+    FETCH NEXT FROM wait_cur INTO @BlockedRowId, @Spid, @WaitResource, @ResourceType, @DbName,
+        @ObjectId, @SchemaName, @ObjectName, @IndexId, @HobtId, @FileId, @FileName, @PageId, @SlotId;
 END;
 CLOSE wait_cur;
 DEALLOCATE wait_cur;
@@ -396,38 +381,38 @@ JOIN (SELECT LeadingBlocker, COUNT(*) BlockedSpidCount FROM #Blocked GROUP BY Le
 -- Populate SessionInfo column with HTML details for sending email
 -- Since there's a bunch of logic here, code is more readable doing this separate than mashing it in with the rest of HTML email creation
 UPDATE lb
-SET SessionInfo = '<span style="font-weight:bold">Login = </span>' + LoginName + '<br>' +
+SET SessionInfo = '<span style="font-weight:bold">Login = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(LoginName)) + '<br>' +
                   CASE WHEN TransactionCnt <> 0 
                     THEN '<span style="font-weight:bold">Transaction Count = </span>' + CAST(TransactionCnt AS nvarchar(10)) + '<br>' 
                     ELSE ''
                   END +
                   CASE WHEN WaitResource <> ''
-                    THEN '<span style="font-weight:bold">Wait Resource = </span>' + COALESCE(WaitDescription,WaitResource) + '<br>' 
+                    THEN '<span style="font-weight:bold">Wait Resource = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(COALESCE(WaitDescription,WaitResource))) + '<br>'
                     ELSE ''
                   END +
-                  '<span style="font-weight:bold">Host Name = </span>' + HostName + '<br>' +
+                  '<span style="font-weight:bold">Host Name = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(HostName)) + '<br>' +
                   CASE WHEN DbName <> ''
-                    THEN '<span style="font-weight:bold">DbName = </span>' + DbName + '<br>' 
+                    THEN '<span style="font-weight:bold">DbName = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(DbName)) + '<br>'
                     ELSE ''
                   END +
                   '<span style="font-weight:bold">Last Request = </span>' + CONVERT(varchar(20),LastRequestStart,20) + '<br>' +
-                  '<span style="font-weight:bold">Program Name = </span>' + ProgramName + '<br>' 
+                  '<span style="font-weight:bold">Program Name = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(ProgramName)) + '<br>'
 FROM #LeadingBlocker lb;
 
 UPDATE b
-SET SessionInfo = '<span style="font-weight:bold">Login = </span>' + LoginName + '<br>' +
-                  '<span style="font-weight:bold">Host Name = </span>' + HostName + '<br>' +
+SET SessionInfo = '<span style="font-weight:bold">Login = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(LoginName)) + '<br>' +
+                  '<span style="font-weight:bold">Host Name = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(HostName)) + '<br>' +
                   CASE WHEN TransactionCnt <> 0 
                     THEN '<span style="font-weight:bold">Transaction Count = </span>' + CAST(TransactionCnt AS nvarchar(10)) + '<br>' 
                     ELSE ''
                   END +
                   CASE WHEN WaitResource <> ''
-                    THEN '<span style="font-weight:bold">Wait Resource = </span>' + COALESCE(WaitDescription,WaitResource) + '<br>' 
+                    THEN '<span style="font-weight:bold">Wait Resource = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(COALESCE(WaitDescription,WaitResource))) + '<br>'
                     ELSE ''
                   END +
-                  '<span style="font-weight:bold">DbName = </span>' + DbName + '<br>' +
+                  '<span style="font-weight:bold">DbName = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(DbName)) + '<br>' +
                   '<span style="font-weight:bold">Last Request = </span>' + CONVERT(varchar(20),LastRequestStart,20) + '<br>' +
-                  '<span style="font-weight:bold">Program Name = </span>' + ProgramName + '<br>'
+                  '<span style="font-weight:bold">Program Name = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(ProgramName)) + '<br>'
 FROM #Blocked b;
 
 --output results in debug mode:
@@ -495,17 +480,17 @@ BEGIN
             N'<th>SQL Statement</th>' +
             N'<th>Input Buffer</th>' +
             N'</tr>' +
-            CAST(( SELECT
+            REPLACE(REPLACE(REPLACE(CAST(( SELECT
                     td = CAST(LeadingBlocker AS nvarchar(10)), '',
                     td = CAST(BlockedSpidCount AS nvarchar(10)), '',
                     td = dbo.XmlSafeText_Get(SessionInfo) ,'',
-                    td = dbo.XmlSafeText_Get(LEFT(SqlStatement,300)), '',    --Truncate string, too long for email alert
-                    td = dbo.XmlSafeText_Get(LEFT(InputBuffer,300)), ''      --Truncate string, too long for email alert
+                    td = dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(LEFT(SqlStatement,300))), '',    --Truncate string, too long for email alert
+                    td = dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(LEFT(InputBuffer,300))), ''      --Truncate string, too long for email alert
                     FROM #LeadingBlocker
                     WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount)
                     ORDER BY LoginTime
                     FOR XML PATH ('tr'), ELEMENTS
-                    ) AS nvarchar(max)) +
+                    ) AS nvarchar(max)), '&lt;', '<'), '&gt;', '>'), '&amp;', '&') +
             N'</table>';
 
     --Waiting/Blocked sessions
@@ -518,26 +503,23 @@ BEGIN
             N'<th>SQL Statement</th>' +
             N'<th>Input Buffer</th>' + 
             N'</tr>' +
-            CAST(( SELECT
+            REPLACE(REPLACE(REPLACE(CAST(( SELECT
                     td = CAST(WaitingSpid AS nvarchar(10)), '',
                     td = dbo.XmlSafeText_Get(RIGHT(BlockingChain,18)), '',   -- We just want the leading blocker & a few spids leading up to that
                     td = CAST(WaitTime/1000 AS nvarchar(10)), '',
                     td = dbo.XmlSafeText_Get(SessionInfo) ,'',
-                    td = dbo.XmlSafeText_Get(LEFT(SqlStatement,300)), '',    --Truncate string, too long for email alert
-                    td = dbo.XmlSafeText_Get(LEFT(InputBuffer,300)), ''      --Truncate string, too long for email alert
+                    td = dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(LEFT(SqlStatement,300))), '',    --Truncate string, too long for email alert
+                    td = dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(LEFT(InputBuffer,300))), ''      --Truncate string, too long for email alert
                     FROM #Blocked b
                     WHERE EXISTS (SELECT 1 FROM #LeadingBlocker lb 
                                 WHERE lb.LeadingBlocker = b.LeadingBlocker
                                 AND lb.BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,lb.BlockedSpidCount))
                     ORDER BY WaitTime desc
                     FOR XML PATH ('tr'), ELEMENTS
-                    ) AS nvarchar(max)) +
+                    ) AS nvarchar(max)), '&lt;', '<'), '&gt;', '>'), '&amp;', '&') +
             N'</table>';
     
     SELECT @EmailBody = @EmailBody + '<hr>' + dbo.EmailServerInfo_Get();
-
-    SELECT @EmailBody = REPLACE(@EmailBody,'&lt;','<');
-    SELECT @EmailBody = REPLACE(@EmailBody,'&gt;','>');
 
     SELECT @EmailFromDomain = UnicodeValue
     FROM dbo.Config

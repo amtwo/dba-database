@@ -28,6 +28,7 @@ MODIFICATIONS:
     20171208 - AM2 - Add some functionality so that I can alert on number of sessions blocked.
     20171210 - AM2 - Add Debug Mode = 2 to return the Email Body as a chunk of HTML instead of emailing it.
     20261101 - Cody - Decode TAB wait resources to object and index names.
+    20261101 - Cody - Use shared wait-resource and SQL Agent job ID functions.
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
@@ -51,9 +52,19 @@ DECLARE @Id int = 1,
         @JobIdHex nvarchar(34),
         @JobName nvarchar(256),
         @WaitResource nvarchar(256),
+        @ResourceType varchar(8),
         @DbName nvarchar(256),
+        @ObjectId int,
+        @SchemaName sysname,
         @ObjectName nvarchar(256),
         @IndexName nvarchar(256),
+        @IndexId int,
+        @HobtId bigint,
+        @FileId int,
+        @FileName sysname,
+        @PageId bigint,
+        @SlotId int,
+        @BlockedRowId int,
         @Sql nvarchar(max);
 
 CREATE TABLE #Blocked (
@@ -201,17 +212,20 @@ BEGIN
 END;
 
 --Convert Hex job_ids for SQL Agent jobs to names.
-WHILE EXISTS(SELECT 1 FROM #Blocked WHERE ProgramName LIKE 'SQLAgent - TSQL JobStep (Job 0x%')
+WHILE EXISTS (
+    SELECT 1
+    FROM #Blocked b
+    CROSS APPLY dbo.SqlAgentJobId_Get(b.ProgramName) jobId
+    WHERE jobId.JobIdHex IS NOT NULL
+)
 BEGIN
-    SELECT @JobIdHex = '', @JobName = '';
-
-    SELECT TOP 1 @ID = ID, 
-            @JobIdHex =  SUBSTRING(ProgramName,30,34)
-    FROM #Blocked
-    WHERE ProgramName LIKE 'SQLAgent - TSQL JobStep (Job 0x%';
-
-    SELECT @Sql = N'SELECT @JobName = name FROM msdb.dbo.sysjobs WHERE job_id = ' + @JobIdHex;
-    EXEC sp_executesql @Sql, N'@JobName nvarchar(256) OUT', @JobName = @JobName OUT;
+    SELECT TOP (1)
+        @Id = b.ID,
+        @JobIdHex = jobId.JobIdHex,
+        @JobName = jobId.JobName
+    FROM #Blocked b
+    CROSS APPLY dbo.SqlAgentJobId_Get(b.ProgramName) jobId
+    WHERE jobId.JobIdHex IS NOT NULL;
 
     UPDATE b
     SET ProgramName = LEFT(REPLACE(ProgramName,@JobIdHex,@JobName),128)
@@ -219,102 +233,85 @@ BEGIN
     WHERE ID = @Id;
 END;
 
---Decypher wait resources.
-DECLARE wait_cur CURSOR FOR
-    SELECT WaitingSpid, WaitResource FROM #Blocked WHERE WaitResource <> '';
+--Decode wait resources.
+DECLARE wait_cur CURSOR LOCAL FAST_FORWARD FOR
+    SELECT b.ID, b.WaitingSpid, resource.RawResource, resource.ResourceType, resource.DatabaseName,
+           resource.ObjectId, resource.SchemaName, resource.ObjectName, resource.IndexId, resource.HobtId,
+           resource.FileId, resource.FileName, resource.PageId, resource.SlotId
+    FROM #Blocked b
+    CROSS APPLY dbo.WaitResource_Get(b.WaitResource) resource
+    WHERE b.WaitResource <> '';
 
 OPEN wait_cur;
-FETCH NEXT FROM wait_cur INTO @Spid, @WaitResource;
+FETCH NEXT FROM wait_cur INTO @BlockedRowId, @Spid, @WaitResource, @ResourceType, @DbName,
+    @ObjectId, @SchemaName, @ObjectName, @IndexId, @HobtId, @FileId, @FileName, @PageId, @SlotId;
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    IF @WaitResource LIKE 'KEY%'
+    SET @IndexName = NULL;
+
+    IF @ResourceType = 'KEY'
     BEGIN
-        --Decypher DB portion of wait resource
-        SET @WaitResource = LTRIM(REPLACE(@WaitResource,'KEY:',''));
-        SET @DbName = db_name(SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource)));
-        --now get the object name
-        SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256);
-        SELECT @Sql = 'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + ''.'' + o.name, @IndexName = i.name ' +
-            'FROM ' + QUOTENAME(@DbName) + '.sys.partitions p ' +
-            'JOIN ' + QUOTENAME(@DbName) + '.sys.objects o ON p.OBJECT_ID = o.OBJECT_ID ' +
-            'JOIN ' + QUOTENAME(@DbName) + '.sys.indexes i ON p.OBJECT_ID = i.OBJECT_ID  AND p.index_id = i.index_id ' +
-            'WHERE p.hobt_id = SUBSTRING(@WaitResource,0,CHARINDEX('' '',@WaitResource))'
-        EXEC sp_executesql @sql,N'@WaitResource nvarchar(256),@ObjectName nvarchar(256) OUT,@IndexName nvarchar(256) OUT',
-                @WaitResource = @WaitResource, @ObjectName = @ObjectName OUT, @IndexName = @IndexName OUT
-        --now populate the WaitDescription column
-        UPDATE b
-        SET WaitDescription = 'KEY WAIT: ' + @DbName + '.' + @ObjectName + ' (' + COALESCE(@IndexName,'') + ')'
-        FROM #Blocked b
-        WHERE WaitingSpid = @Spid;
-    END;
-    ELSE IF @WaitResource LIKE 'OBJECT%'
-    BEGIN
-        --Decypher DB portion of wait resource
-        SET @WaitResource = LTRIM(REPLACE(@WaitResource,'OBJECT:',''));
-        SET @DbName = db_name(SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource)));
-        --now get the object name
-        SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256);
-        SET @Sql = 'SELECT @ObjectName = schema_name(schema_id) + ''.'' + name FROM [' + @DbName + '].sys.objects WHERE object_id = SUBSTRING(@WaitResource,0,CHARINDEX('':'',@WaitResource))';
-        EXEC sp_executesql @sql,N'@WaitResource nvarchar(256),@ObjectName nvarchar(256) OUT',@WaitResource = @WaitResource, @ObjectName = @ObjectName OUT;
-        --Now populate the WaitDescription column
-        UPDATE b
-        SET WaitDescription = 'OBJECT WAIT: ' + @DbName + '.' + @ObjectName
-        FROM #Blocked b
-        WHERE WaitingSpid = @Spid;
-    END;
-    ELSE IF @WaitResource LIKE 'TAB:%'
-    BEGIN
-        --Decypher the database, object, and index portions of a table wait resource
-        SET @WaitResource = LTRIM(REPLACE(@WaitResource,'TAB:',''));
-        SET @DbName = DB_NAME(TRY_CONVERT(int, SUBSTRING(@WaitResource, 1, CHARINDEX(':', @WaitResource) - 1)));
-        SET @WaitResource = SUBSTRING(@WaitResource, CHARINDEX(':', @WaitResource) + 1, 256);
         SET @ObjectName = NULL;
-        SET @IndexName = NULL;
-        SET @Sql = 'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + ''.'' + o.name, @IndexName = i.name ' +
-            'FROM ' + QUOTENAME(@DbName) + '.sys.objects o ' +
-            'LEFT JOIN ' + QUOTENAME(@DbName) + '.sys.indexes i ON o.object_id = i.object_id ' +
-            'AND i.index_id = TRY_CONVERT(int, SUBSTRING(@WaitResource, CHARINDEX('':'', @WaitResource) + 1, 256)) ' +
-            'WHERE o.object_id = TRY_CONVERT(int, SUBSTRING(@WaitResource, 1, CHARINDEX('':'', @WaitResource) - 1))';
-        EXEC sp_executesql @Sql,
-            N'@WaitResource nvarchar(256), @ObjectName nvarchar(256) OUT, @IndexName nvarchar(256) OUT',
-            @WaitResource = @WaitResource, @ObjectName = @ObjectName OUT, @IndexName = @IndexName OUT;
-        --Now populate the WaitDescription column
+        SET @Sql = N'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + N''.'' + o.name, @IndexName = i.name ' +
+            N'FROM ' + QUOTENAME(@DbName) + N'.sys.partitions p ' +
+            N'JOIN ' + QUOTENAME(@DbName) + N'.sys.objects o ON p.object_id = o.object_id ' +
+            N'JOIN ' + QUOTENAME(@DbName) + N'.sys.indexes i ON p.object_id = i.object_id AND p.index_id = i.index_id ' +
+            N'WHERE p.hobt_id = @HobtId';
+        EXEC sys.sp_executesql @Sql,
+            N'@HobtId bigint, @ObjectName nvarchar(256) OUTPUT, @IndexName nvarchar(256) OUTPUT',
+            @HobtId = @HobtId, @ObjectName = @ObjectName OUTPUT, @IndexName = @IndexName OUTPUT;
+
         UPDATE b
-        SET WaitDescription = 'TAB WAIT: ' + @DbName + '.' + @ObjectName +
-            CASE WHEN @IndexName IS NULL THEN '' ELSE ' (Index: ' + @IndexName + ')' END
+        SET WaitDescription = COALESCE('KEY WAIT: ' + @DbName + '.' + @ObjectName + ' (' + COALESCE(@IndexName, '') + ')', @WaitResource)
         FROM #Blocked b
-        WHERE WaitingSpid = @Spid;
+        WHERE b.ID = @BlockedRowId;
     END;
-    ELSE IF (@WaitResource LIKE 'PAGE%' OR @WaitResource LIKE 'RID%')
+    ELSE IF @ResourceType = 'OBJECT'
     BEGIN
-        --Decypher DB portion of wait resource
-        SELECT @WaitResource = LTRIM(REPLACE(@WaitResource,'PAGE:',''));
-        SELECT @WaitResource = LTRIM(REPLACE(@WaitResource,'RID:',''));
-        SET @DbName = db_name(SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource)));
-        --now get the file name
-        SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256)
-        SELECT @ObjectName = name 
-        FROM sys.master_files
-        WHERE database_id = db_id(@DbName)
-        AND file_id = SUBSTRING(@WaitResource,0,CHARINDEX(':',@WaitResource));
-        --Now populate the WaitDescription column
-        SET @WaitResource = SUBSTRING(@WaitResource,CHARINDEX(':',@WaitResource)+1,256)
-        IF @WaitResource LIKE '%:%'
+        UPDATE b
+        SET WaitDescription = COALESCE('OBJECT WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName, @WaitResource)
+        FROM #Blocked b
+        WHERE b.ID = @BlockedRowId;
+    END;
+    ELSE IF @ResourceType = 'TAB'
+    BEGIN
+        SET @Sql = N'SELECT @IndexName = i.name FROM ' + QUOTENAME(@DbName) +
+            N'.sys.indexes i WHERE i.object_id = @ObjectId AND i.index_id = @IndexId';
+        EXEC sys.sp_executesql @Sql,
+            N'@ObjectId int, @IndexId int, @IndexName nvarchar(256) OUTPUT',
+            @ObjectId = @ObjectId, @IndexId = @IndexId, @IndexName = @IndexName OUTPUT;
+
+        UPDATE b
+        SET WaitDescription = COALESCE('TAB WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName +
+            CASE WHEN @IndexId IS NULL OR @IndexId = 0 THEN ''
+                 WHEN @IndexName IS NOT NULL THEN ' (Index: ' + @IndexName + ')'
+                 ELSE ' (Index ID: ' + CONVERT(varchar(11), @IndexId) + ')'
+            END, @WaitResource)
+        FROM #Blocked b
+        WHERE b.ID = @BlockedRowId;
+    END;
+    ELSE IF @ResourceType IN ('PAGE', 'RID')
+    BEGIN
+        IF @ResourceType = 'RID'
         BEGIN
             UPDATE b
-            SET WaitDescription = 'ROW WAIT: ' + @DbName + ' File: ' + @ObjectName + ' Page_id/Slot: ' + @WaitResource
+            SET WaitDescription = COALESCE('ROW WAIT: ' + @DbName + ' File: ' + @FileName +
+                ' Page_id/Slot: ' + CONVERT(varchar(20), @PageId) + ':' + CONVERT(varchar(11), @SlotId), @WaitResource)
             FROM #Blocked b
-            WHERE WaitingSpid = @Spid;
+            WHERE b.ID = @BlockedRowId;
         END;
         ELSE
         BEGIN
             UPDATE b
-            SET WaitDescription = 'PAGE WAIT: ' + @DbName + ' File: ' + @ObjectName + ' Page_id: ' + @WaitResource
+            SET WaitDescription = COALESCE('PAGE WAIT: ' + @DbName + ' File: ' + @FileName +
+                ' Page_id: ' + CONVERT(varchar(20), @PageId), @WaitResource)
             FROM #Blocked b
-            WHERE WaitingSpid = @Spid;
+            WHERE b.ID = @BlockedRowId;
         END;
     END;
-    FETCH NEXT FROM wait_cur INTO @Spid, @WaitResource;
+
+    FETCH NEXT FROM wait_cur INTO @BlockedRowId, @Spid, @WaitResource, @ResourceType, @DbName,
+        @ObjectId, @SchemaName, @ObjectName, @IndexId, @HobtId, @FileId, @FileName, @PageId, @SlotId;
 END;
 CLOSE wait_cur;
 DEALLOCATE wait_cur;
