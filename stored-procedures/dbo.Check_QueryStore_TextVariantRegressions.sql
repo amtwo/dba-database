@@ -32,7 +32,9 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
-EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TextVariantRegressions'
+IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @DbName AND is_query_store_on = 1)
+BEGIN
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TextVariantRegressions'
         + N' @DatabaseName = @DbName'
         + N', @VariantSince  = ' + QUOTENAME(CONVERT(nvarchar(35), @VariantSince, 127), '''')
         + N', @WindowEnd     = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''), N'NULL')
@@ -44,7 +46,8 @@ EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TextVariantRegressions'
         + N', @NormalizeLineEndings = ' + CONVERT(nvarchar(1), @NormalizeLineEndings)
         + N', @IgnoreAllWhiteSpace = ' + CONVERT(nvarchar(1), @IgnoreAllWhiteSpace)
         + N', @IgnoreCapitalization = ' + CONVERT(nvarchar(1), @IgnoreCapitalization)
-        + N', @Debug         = ' + CONVERT(nvarchar(1), @Debug) + N';';
+        + N', @Debug         = ' + CONVERT(nvarchar(1), @Debug) + N';
+END;';
 
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;

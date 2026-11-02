@@ -84,6 +84,7 @@ Totals AS (
     FROM QueryStats AS qs
 )
 SELECT TOP (@Top)
+    DatabaseName = DB_NAME(),
     t.query_hash,
     t.Execs,
     LogicalIoPages       = CONVERT(decimal(18, 1), t.LogicalIoPages),

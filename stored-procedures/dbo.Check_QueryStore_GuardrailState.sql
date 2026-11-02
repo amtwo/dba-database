@@ -23,11 +23,14 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
-EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_GuardrailState'
+IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @DbName AND is_query_store_on = 1)
+BEGIN
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_GuardrailState'
         + N' @DatabaseName = @DbName'
         + N', @QueryHashes = ' + COALESCE(N'''' + REPLACE(@QueryHashes, N'''', N'''''') + N'''', N'NULL')
         + N', @ActiveDays  = ' + CONVERT(nvarchar(12), @ActiveDays)
-        + N', @Debug       = ' + CONVERT(nvarchar(1), @Debug) + N';';
+        + N', @Debug       = ' + CONVERT(nvarchar(1), @Debug) + N';
+END;';
 
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;

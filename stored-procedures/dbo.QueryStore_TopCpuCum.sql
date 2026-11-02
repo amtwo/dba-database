@@ -77,6 +77,7 @@ WITH QueryStats AS (
     GROUP BY q.query_hash
 )
 SELECT TOP (@Top)
+    DatabaseName = DB_NAME(),
     qs.query_hash,
     qs.Execs,
     CpuSec               = CONVERT(decimal(18, 1), qs.CpuSec),

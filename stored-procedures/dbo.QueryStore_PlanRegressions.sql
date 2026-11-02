@@ -13,7 +13,7 @@ DESCRIPTION
     window. It reports a query when the most recently used plan costs at least @MinCpuRatio times
     as much CPU per execution as another plan that meets the execution threshold. Queries with
     only one plan are excluded. The result includes statements to force the lower-CPU plan and
-    roll back that change; this procedure is read-only. Requires Query Store hint support, available in SQL Server 2022 and later.
+    roll back that change; this procedure is read-only. HintText is NULL before SQL Server 2022.
 
 PARAMETERS
 * @DatabaseName - Target database name. The database must have Query Store enabled.
@@ -54,19 +54,8 @@ BEGIN
     RETURN;
 END;
 
-DECLARE @SupportsQueryStoreHints bit = 0,
-        @VersionCheck nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql';
-
-EXEC @VersionCheck
-    N'SELECT @SupportsQueryStoreHints = CASE WHEN OBJECT_ID(N''sys.query_store_query_hints'') IS NULL THEN 0 ELSE 1 END;',
-    N'@SupportsQueryStoreHints bit OUTPUT',
-    @SupportsQueryStoreHints = @SupportsQueryStoreHints OUTPUT;
-
-IF @SupportsQueryStoreHints = 0
-BEGIN
-    RAISERROR('Database %s does not expose Query Store hints. This report requires Query Store hint support, available in SQL Server 2022 and later.', 16, 1, @DatabaseName);
-    RETURN;
-END;
+DECLARE @SupportsQueryStoreHints bit =
+    CASE WHEN CONVERT(int, SERVERPROPERTY(N'ProductMajorVersion')) >= 16 THEN 1 ELSE 0 END;
 
 SET @WindowEnd   = ISNULL(@WindowEnd, SYSDATETIMEOFFSET());
 SET @WindowStart = ISNULL(@WindowStart, DATEADD(HOUR, -4, @WindowEnd));
@@ -74,7 +63,7 @@ SET @WindowStart = ISNULL(@WindowStart, DATEADD(HOUR, -4, @WindowEnd));
 DECLARE @Exec nvarchar(400) = QUOTENAME(@DatabaseName) + N'.sys.sp_executesql',
         @Sql  nvarchar(max);
 
-SET @Sql = N'
+SET @Sql = CONVERT(nvarchar(max), N'') + N'
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET LOCK_TIMEOUT 1000;
 
@@ -130,6 +119,7 @@ Ranked AS (
     FROM PlanStats AS ps
 )
 SELECT
+    DatabaseName = DB_NAME(),
     l.query_hash,
     l.query_id,
     ObjectName        = OBJECT_SCHEMA_NAME(l.object_id) + N''.'' + OBJECT_NAME(l.object_id),
@@ -150,7 +140,9 @@ SELECT
     CpuRatio          = CONVERT(decimal(18, 2), l.CpuMsPerExec / NULLIF(b.CpuMsPerExec, 0)),
     ExcessCpuSec      = CONVERT(decimal(18, 1), (l.CpuMsPerExec - b.CpuMsPerExec) * l.Execs / 1000.0),
     AnyPlanForced     = CASE WHEN EXISTS (SELECT 1 FROM sys.query_store_plan AS fp WHERE fp.query_id = l.query_id AND fp.is_forced_plan = 1) THEN 1 ELSE 0 END,
-    HintText          = h.query_hint_text,
+    HintText          = ' + CASE WHEN @SupportsQueryStoreHints = 1
+        THEN N'(SELECT STRING_AGG(n.query_hint_text, N''; '') FROM sys.query_store_query_hints AS n WHERE n.query_id = l.query_id)'
+        ELSE N'CONVERT(nvarchar(max), NULL)' END + N',
     ForceSql          = N''EXEC sys.sp_query_store_force_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)
                         + N'', @plan_id = '' + CONVERT(nvarchar(20), b.plan_id) + N'';'',
     RollbackSql       = N''EXEC sys.sp_query_store_unforce_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)
@@ -159,8 +151,6 @@ FROM Ranked AS l
 JOIN Ranked AS b
     ON b.query_id = l.query_id
    AND b.BestRn = 1
-LEFT JOIN sys.query_store_query_hints AS h
-    ON h.query_id = l.query_id
 WHERE l.LatestRn = 1
   AND l.plan_id <> b.plan_id
   AND l.CpuMsPerExec >= @MinCpuRatio * b.CpuMsPerExec

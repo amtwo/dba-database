@@ -137,6 +137,7 @@ WHERE q.last_execution_time >= @ActiveSince
    OR fp.plan_id IS NOT NULL;
 
 SELECT
+    DatabaseName = DB_NAME(),
     v.query_hash,
     v.query_id,
     ObjectName       = OBJECT_SCHEMA_NAME(v.object_id) + N''.'' + OBJECT_NAME(v.object_id),

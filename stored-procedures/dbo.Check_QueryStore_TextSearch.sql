@@ -58,7 +58,9 @@ BEGIN
     END;
 
     DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
-EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.sp_QuickieStore'
+IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @DbName AND is_query_store_on = 1)
+BEGIN
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.sp_QuickieStore'
         + N' @database_name = @DbName'
         + N', @query_text_search = ' + CASE WHEN @SearchText IS NULL THEN N'NULL'
             ELSE N'N''' + REPLACE(@SearchText, N'''', N'''''') + N'''' END
@@ -71,7 +73,8 @@ EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.sp_QuickieStore'
         + N', @escape_brackets = ' + CONVERT(nvarchar(1), @EscapeBrackets)
         + N', @query_type = ' + COALESCE(QUOTENAME(@QueryType, ''''), N'NULL')
         + N', @expert_mode = ' + CONVERT(nvarchar(1), @ExpertMode)
-        + N', @hide_help_table = 1;';
+        + N', @hide_help_table = 1;
+END;';
 
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;

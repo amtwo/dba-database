@@ -26,13 +26,16 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @Command nvarchar(max) = N'DECLARE @DbName sysname = DB_NAME();
-EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopCpuDelta'
+IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @DbName AND is_query_store_on = 1)
+BEGIN
+    EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopCpuDelta'
         + N' @DatabaseName = @DbName'
         + N', @WindowStart        = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowStart, 127), ''''), N'NULL')
         + N', @WindowEnd          = ' + COALESCE(QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''), N'NULL')
         + N', @CompareOffsetHours = ' + CONVERT(nvarchar(12), @CompareOffsetHours)
         + N', @Top                = ' + CONVERT(nvarchar(12), @Top)
-        + N', @Debug              = ' + CONVERT(nvarchar(1), @Debug) + N';';
+        + N', @Debug              = ' + CONVERT(nvarchar(1), @Debug) + N';
+END;';
 
     IF @Debug = 1
         EXEC dbo.Debug_Print @DebugMessage = @Command;
@@ -46,25 +49,12 @@ EXEC ' + QUOTENAME(DB_NAME()) + N'.dbo.QueryStore_TopCpuDelta'
 END;
 GO
 
-/* Synonym for backwards compatibility with the legacy procedure name. */
-IF OBJECT_ID(N'dbo.Check_QueryStoreRegressedQueries', N'P') IS NOT NULL
-    DROP PROCEDURE dbo.Check_QueryStoreRegressedQueries;
-
+-- Remove the retired legacy synonym on upgrades.
 IF EXISTS (
     SELECT 1
     FROM sys.synonyms
     WHERE name = N'Check_QueryStoreRegressedQueries'
-      AND OBJECT_SCHEMA_NAME(object_id) = N'dbo'
-      AND base_object_name <> N'dbo.Check_QueryStore_TopCpuDelta'
+      AND schema_id = SCHEMA_ID(N'dbo')
 )
     DROP SYNONYM dbo.Check_QueryStoreRegressedQueries;
-
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.synonyms
-    WHERE name = N'Check_QueryStoreRegressedQueries'
-      AND OBJECT_SCHEMA_NAME(object_id) = N'dbo'
-      AND base_object_name = N'dbo.Check_QueryStore_TopCpuDelta'
-)
-    EXEC(N'CREATE SYNONYM dbo.Check_QueryStoreRegressedQueries FOR dbo.Check_QueryStore_TopCpuDelta;');
 GO

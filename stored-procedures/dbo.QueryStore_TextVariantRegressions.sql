@@ -114,9 +114,9 @@ SELECT
     q.object_id,
     q.initial_compile_start_time,
     CASE WHEN q.initial_compile_start_time >= @VariantSince THEN 1 ELSE 0 END,
-    HASHBYTES(''SHA2_256'', CASE WHEN @IgnoreCapitalization = 1
-        THEN LOWER(wn.NormalizedText COLLATE Latin1_General_100_CI_AS)
-        ELSE wn.NormalizedText COLLATE Latin1_General_BIN2 END)
+    CASE WHEN @IgnoreCapitalization = 1
+        THEN HASHBYTES(''SHA2_256'', LOWER(wn.NormalizedText COLLATE Latin1_General_100_CI_AS))
+        ELSE HASHBYTES(''SHA2_256'', wn.NormalizedText COLLATE Latin1_General_BIN2) END
 FROM sys.query_store_query AS q
 JOIN sys.query_store_query_text AS qt
     ON qt.query_text_id = q.query_text_id
@@ -182,6 +182,7 @@ HAVING SUM(rs.count_executions) >= @MinExecs;
     WHERE a.IsNewVariant = 0
 )
 SELECT
+    DatabaseName = DB_NAME(),
     NewQueryId         = n.query_id,
     NewQueryHash       = n.query_hash,
     ObjectName         = OBJECT_SCHEMA_NAME(n.object_id) + N''.'' + OBJECT_NAME(n.object_id),
