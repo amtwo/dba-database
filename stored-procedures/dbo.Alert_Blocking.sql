@@ -474,9 +474,9 @@ BEGIN
             CAST(( SELECT
                     td = CAST(LeadingBlocker AS nvarchar(10)), '',
                     td = CAST(BlockedSpidCount AS nvarchar(10)), '',
-                    td = SessionInfo ,'',
-                    td = LEFT(SqlStatement,300), '',    --Truncate string, too long for email alert
-                    td = LEFT(InputBuffer,300), ''      --Truncate string, too long for email alert
+                    td = dbo.XmlSafeText_Get(SessionInfo) ,'',
+                    td = dbo.XmlSafeText_Get(LEFT(SqlStatement,300)), '',    --Truncate string, too long for email alert
+                    td = dbo.XmlSafeText_Get(LEFT(InputBuffer,300)), ''      --Truncate string, too long for email alert
                     FROM #LeadingBlocker
                     WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount)
                     ORDER BY LoginTime
@@ -496,11 +496,11 @@ BEGIN
             N'</tr>' +
             CAST(( SELECT
                     td = CAST(WaitingSpid AS nvarchar(10)), '',
-                    td = RIGHT(BlockingChain,18), '',   -- We just want the leading blocker & a few spids leading up to that
+                    td = dbo.XmlSafeText_Get(RIGHT(BlockingChain,18)), '',   -- We just want the leading blocker & a few spids leading up to that
                     td = CAST(WaitTime/1000 AS nvarchar(10)), '',
-                    td = SessionInfo ,'',
-                    td = LEFT(SqlStatement,300), '',    --Truncate string, too long for email alert
-                    td = LEFT(InputBuffer,300), ''      --Truncate string, too long for email alert
+                    td = dbo.XmlSafeText_Get(SessionInfo) ,'',
+                    td = dbo.XmlSafeText_Get(LEFT(SqlStatement,300)), '',    --Truncate string, too long for email alert
+                    td = dbo.XmlSafeText_Get(LEFT(InputBuffer,300)), ''      --Truncate string, too long for email alert
                     FROM #Blocked b
                     WHERE EXISTS (SELECT 1 FROM #LeadingBlocker lb 
                                 WHERE lb.LeadingBlocker = b.LeadingBlocker

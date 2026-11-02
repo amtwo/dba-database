@@ -177,14 +177,14 @@ SET SessionInfo = (SELECT TransactionState =
                                       END,
                             TransactionLengthMinutes = CONVERT(varchar(20),TransactionLengthMinutes,20),
                             SessionID = Spid,
-                            DbName,
-                            LoginName,
-                            HostName,
-                            DbName,
-                            WaitResource,
+                            DbName = dbo.XmlSafeText_Get(DbName),
+                            LoginName = dbo.XmlSafeText_Get(LoginName),
+                            HostName = dbo.XmlSafeText_Get(HostName),
+                            DbName = dbo.XmlSafeText_Get(DbName),
+                            WaitResource = dbo.XmlSafeText_Get(WaitResource),
                             LoginTime = CONVERT(varchar(20),LoginTime,20),
                             LastRequest = CONVERT(varchar(20),LastRequestStart,20),
-                            ProgramName
+                            ProgramName = dbo.XmlSafeText_Get(ProgramName)
                     FROM #OpenTrans t2 
                     WHERE t2.id = t.id
                     FOR XML PATH ('Transaction') )
