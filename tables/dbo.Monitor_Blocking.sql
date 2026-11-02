@@ -1,4 +1,5 @@
---dbo.Alert_Blocking stored procedure will log blocking to this table.
+--dbo.Alert_Blocking stores blocking details and the associated email attempt lifecycle in this table.
+--EmailStatus values include sending, queued, error, and debug; queued means accepted by Database Mail, not confirmed delivered.
 IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = object_id('dbo.Monitor_Blocking'))
 BEGIN
     CREATE TABLE dbo.Monitor_Blocking(
@@ -20,9 +21,66 @@ BEGIN
         SqlText             nvarchar(max) NULL,
         InputBuffer         nvarchar(4000) NULL,
         SqlStatement        nvarchar(max) NULL,
+        AlertId             uniqueidentifier NULL,
+        AlertRecipients     varchar(max) NULL,
+        EmailAttemptDateTime datetime2(3) NULL,
+        EmailQueuedDateTime  datetime2(3) NULL,
+        EmailStatus          varchar(16) NULL,
+        DatabaseMailItemId   int NULL,
+        EmailError           nvarchar(4000) NULL,
         CONSTRAINT PK_Monitor_Blocking PRIMARY KEY CLUSTERED (LogDateTime,LogId )
     ) ON [DATA];
 END
+GO
+
+IF COL_LENGTH('dbo.Monitor_Blocking', 'AlertId') IS NULL
+    ALTER TABLE dbo.Monitor_Blocking ADD AlertId uniqueidentifier NULL;
+GO
+
+IF COL_LENGTH('dbo.Monitor_Blocking', 'AlertRecipients') IS NULL
+    ALTER TABLE dbo.Monitor_Blocking ADD AlertRecipients varchar(max) NULL;
+GO
+
+IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailAttemptDateTime') IS NULL
+    ALTER TABLE dbo.Monitor_Blocking ADD EmailAttemptDateTime datetime2(3) NULL;
+GO
+
+IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailQueuedDateTime') IS NULL
+    ALTER TABLE dbo.Monitor_Blocking ADD EmailQueuedDateTime datetime2(3) NULL;
+GO
+
+IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailStatus') IS NULL
+    ALTER TABLE dbo.Monitor_Blocking ADD EmailStatus varchar(16) NULL;
+GO
+
+IF COL_LENGTH('dbo.Monitor_Blocking', 'DatabaseMailItemId') IS NULL
+    ALTER TABLE dbo.Monitor_Blocking ADD DatabaseMailItemId int NULL;
+GO
+
+IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailError') IS NULL
+    ALTER TABLE dbo.Monitor_Blocking ADD EmailError nvarchar(4000) NULL;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE object_id = OBJECT_ID('dbo.Monitor_Blocking')
+    AND name = 'IX_Monitor_Blocking_EmailAttemptDateTime_Sending'
+)
+    CREATE NONCLUSTERED INDEX IX_Monitor_Blocking_EmailAttemptDateTime_Sending
+        ON dbo.Monitor_Blocking (EmailAttemptDateTime)
+        WHERE EmailStatus = 'sending';
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE object_id = OBJECT_ID('dbo.Monitor_Blocking')
+    AND name = 'IX_Monitor_Blocking_EmailQueuedDateTime_Queued'
+)
+    CREATE NONCLUSTERED INDEX IX_Monitor_Blocking_EmailQueuedDateTime_Queued
+        ON dbo.Monitor_Blocking (EmailQueuedDateTime)
+        WHERE EmailStatus = 'queued';
 GO
 
 

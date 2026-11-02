@@ -13,10 +13,11 @@ AS
 AUTHOR: Andy Mallon
 CREATED: 20141218
     This procedure checks for blocking exceeding a duration of @BlockingDurationThreshold.
-    Log the lead blocker to a table (only when not in @Debug mode).
+    Log leading blockers with email attempt status, or record HTML debug output.
     @Debug parameter controls whether to email blocking to @EmailRecipients or to output resultset.
-    @EmailThreshold throttles email so that the server only sends email every N minutes.
+    @EmailThreshold throttles queued email so that the server only submits an email every N minutes.
     Set @EmailThreshold to 0 to disable email throttling; negative values are invalid.
+    An in-flight send claim expires after five minutes if its session does not update the status.
 
 PARAMETERS
 * @BlockingDurationThreshold - seconds - Alters on blocked sessions that have been waiting longer than this many seconds.
@@ -46,6 +47,7 @@ MODIFICATIONS:
     20261101 - Cody - Hardened blocking alert validation and metadata handling.
     20261101 - Cody - Decode TAB wait resources to object and index names.
     20261101 - Cody - Use shared wait-resource and SQL Agent job ID functions and encode HTML data.
+    20261101 - Cody - Serialize alert submissions and record queue/error status for retry safety.
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
@@ -91,7 +93,21 @@ DECLARE @Id int = 1,
         @EmailFromDomain varchar(max),
         @EmailFrom varchar(max),
         @EmailBody nvarchar(max),
-        @EmailSubject nvarchar(255);
+        @EmailSubject nvarchar(255),
+        @AlertId uniqueidentifier = NEWID(),
+        @EmailAttemptDateTime datetime2(3),
+        @EmailQueuedDateTime datetime2(3),
+        @EmailError nvarchar(4000),
+        @DatabaseMailItemId int,
+        @DatabaseMailReturnCode int,
+        @ApplicationLockResult int,
+        @ApplicationLockReleaseResult int,
+        @ApplicationLockHeld bit = 0;
+
+DECLARE @AlertLogRows table (
+    LogDateTime datetime2(0) NOT NULL,
+    LogId int NOT NULL PRIMARY KEY
+);
 
 CREATE TABLE #Blocked (
     ID int identity(1,1) PRIMARY KEY,
@@ -453,25 +469,9 @@ BEGIN
     RETURN (0);
 END;
 
---Check EmailThreshold before continuing. RETURN within @EmailThreshold
--- should this check be at the top of the alert?
-IF @EmailThreshold > 0
-AND EXISTS (SELECT 1 FROM dbo.Monitor_Blocking WHERE LogDateTime >= DATEADD(mi,-1*@EmailThreshold,GETDATE()))
-BEGIN
-    RETURN(0);
-END;
-
 -- Logging & Email Only happens when @Debug = 0
 IF @Debug IN (0,2) 
 BEGIN
-    --Log leading blockers to a real table, too.
-    INSERT INTO dbo.Monitor_Blocking (LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
-                        LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount)
-    SELECT LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart, 
-                        LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount
-    FROM #LeadingBlocker lb
-    WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount);
-
     --Email about blocking
     -- TBD: Possibly email users if they are the leading blocker as well (based on loginname)?
 
@@ -545,17 +545,177 @@ BEGIN
         SET @EmailSubject = 'ALERT: Blocking Detected';
         SET @EmailFrom = @@SERVERNAME + ' <' + REPLACE(@@SERVERNAME,'\','_') + @EmailFromDomain + '>';
 
-        EXEC msdb.dbo.sp_send_dbmail
-            @recipients = @EmailRecipients,
-            @from_address = @EmailFrom,
-            @subject = @EmailSubject,
-            @body = @EmailBody,
-            @body_format = 'HTML',
-            @importance = 'High';
+        EXEC @ApplicationLockResult = sys.sp_getapplock
+            @Resource = N'dbo.Alert_Blocking.EmailThrottle',
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Session',
+            @LockTimeout = 0;
+
+        -- Another execution is already checking the throttle or creating its sending claim.
+        IF @ApplicationLockResult = -1
+            RETURN (0);
+
+        IF @ApplicationLockResult < 0
+        BEGIN
+            RAISERROR('Could not acquire the blocking-alert application lock (return code %d).',16,1,@ApplicationLockResult);
+            RETURN;
+        END;
+
+        SET @ApplicationLockHeld = 1;
+
+        BEGIN TRY
+            SET @EmailAttemptDateTime = SYSDATETIME();
+
+            -- A fresh sending claim suppresses duplicates for five minutes, even when throttling is disabled.
+            -- A queued email suppresses further alerts only for the configured throttle interval.
+            IF EXISTS (
+                    SELECT 1
+                    FROM dbo.Monitor_Blocking
+                    WHERE EmailStatus = 'sending'
+                    AND EmailAttemptDateTime >= DATEADD(MINUTE,-5,@EmailAttemptDateTime)
+                )
+                OR (@EmailThreshold > 0 AND (
+                    EXISTS (
+                        SELECT 1
+                        FROM dbo.Monitor_Blocking
+                        WHERE EmailStatus = 'queued'
+                        AND EmailQueuedDateTime >= DATEADD(MINUTE,-@EmailThreshold,@EmailAttemptDateTime)
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM dbo.Monitor_Blocking
+                        WHERE EmailStatus = 'sending'
+                        AND DatabaseMailItemId IS NOT NULL
+                        AND EmailQueuedDateTime >= DATEADD(MINUTE,-@EmailThreshold,@EmailAttemptDateTime)
+                    )
+                ))
+            BEGIN
+                EXEC @ApplicationLockReleaseResult = sys.sp_releaseapplock
+                    @Resource = N'dbo.Alert_Blocking.EmailThrottle',
+                    @LockOwner = 'Session';
+
+                IF @ApplicationLockReleaseResult < 0
+                    RAISERROR('Could not release the blocking-alert application lock (return code %d).',16,1,@ApplicationLockReleaseResult);
+
+                SET @ApplicationLockHeld = 0;
+                RETURN (0);
+            END;
+
+            -- Claim the alert before submitting it so concurrent executions see the in-flight state.
+            INSERT INTO dbo.Monitor_Blocking (AlertId, AlertRecipients, EmailAttemptDateTime, EmailStatus,
+                        LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart,
+                        LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount)
+            OUTPUT inserted.LogDateTime, inserted.LogId INTO @AlertLogRows (LogDateTime, LogId)
+            SELECT @AlertId, @EmailRecipients, @EmailAttemptDateTime, 'sending',
+                   LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart,
+                   LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount
+            FROM #LeadingBlocker lb
+            WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount);
+
+            -- The durable sending claim now suppresses other attempts; release the lock so a stale claim can expire.
+            EXEC @ApplicationLockReleaseResult = sys.sp_releaseapplock
+                @Resource = N'dbo.Alert_Blocking.EmailThrottle',
+                @LockOwner = 'Session';
+
+            IF @ApplicationLockReleaseResult < 0
+                RAISERROR('Could not release the blocking-alert application lock (return code %d).',16,1,@ApplicationLockReleaseResult);
+
+            SET @ApplicationLockHeld = 0;
+
+            EXEC @DatabaseMailReturnCode = msdb.dbo.sp_send_dbmail
+                @recipients = @EmailRecipients,
+                @from_address = @EmailFrom,
+                @subject = @EmailSubject,
+                @body = @EmailBody,
+                @body_format = 'HTML',
+                @importance = 'High',
+                @mailitem_id = @DatabaseMailItemId OUTPUT;
+
+            IF COALESCE(@DatabaseMailReturnCode,-1) <> 0
+            BEGIN
+                SET @DatabaseMailReturnCode = COALESCE(@DatabaseMailReturnCode,-1);
+                RAISERROR('Database Mail did not queue the blocking alert (return code %d).',16,1,@DatabaseMailReturnCode);
+            END;
+
+            IF @DatabaseMailItemId IS NULL
+                RAISERROR('Database Mail returned success without a mail item ID.',16,1);
+
+            SET @EmailQueuedDateTime = SYSDATETIME();
+
+            UPDATE mb
+            SET EmailStatus = 'queued',
+                EmailQueuedDateTime = @EmailQueuedDateTime,
+                DatabaseMailItemId = @DatabaseMailItemId,
+                EmailError = NULL
+            FROM dbo.Monitor_Blocking mb
+            INNER JOIN @AlertLogRows r ON r.LogDateTime = mb.LogDateTime AND r.LogId = mb.LogId;
+        END TRY
+        BEGIN CATCH
+            SET @EmailError = ERROR_MESSAGE();
+
+            IF @DatabaseMailReturnCode = 0 AND @DatabaseMailItemId IS NOT NULL
+            BEGIN
+                -- Mail is already queued. Preserve that fact if updating its status initially failed.
+                SET @EmailQueuedDateTime = COALESCE(@EmailQueuedDateTime,SYSDATETIME());
+
+                BEGIN TRY
+                    UPDATE mb
+                    SET EmailStatus = 'queued',
+                        EmailQueuedDateTime = @EmailQueuedDateTime,
+                        DatabaseMailItemId = @DatabaseMailItemId,
+                        EmailError = NULL
+                    FROM dbo.Monitor_Blocking mb
+                    INNER JOIN @AlertLogRows r ON r.LogDateTime = mb.LogDateTime AND r.LogId = mb.LogId;
+                END TRY
+                BEGIN CATCH
+                    BEGIN TRY
+                        UPDATE mb
+                        SET EmailQueuedDateTime = @EmailQueuedDateTime,
+                            DatabaseMailItemId = @DatabaseMailItemId
+                        FROM dbo.Monitor_Blocking mb
+                        INNER JOIN @AlertLogRows r ON r.LogDateTime = mb.LogDateTime AND r.LogId = mb.LogId;
+                    END TRY
+                    BEGIN CATCH
+                        -- Keep the fresh sending claim when the already-queued mail cannot be recorded.
+                    END CATCH;
+                END CATCH;
+            END;
+            ELSE
+            BEGIN
+                BEGIN TRY
+                    UPDATE mb
+                    SET EmailStatus = 'error',
+                        DatabaseMailItemId = @DatabaseMailItemId,
+                        EmailError = @EmailError
+                    FROM dbo.Monitor_Blocking mb
+                    INNER JOIN @AlertLogRows r ON r.LogDateTime = mb.LogDateTime AND r.LogId = mb.LogId;
+                END TRY
+                BEGIN CATCH
+                    -- Preserve the original error; an unupdated sending claim expires after five minutes.
+                END CATCH;
+            END;
+
+            IF @ApplicationLockHeld = 1
+            BEGIN
+                EXEC sys.sp_releaseapplock
+                    @Resource = N'dbo.Alert_Blocking.EmailThrottle',
+                    @LockOwner = 'Session';
+                SET @ApplicationLockHeld = 0;
+            END;
+
+            THROW;
+        END CATCH;
     END;
     --In Debug Mode = 2, just return the Email HTML as a single value resultset.
     IF @Debug = 2
     BEGIN
+        INSERT INTO dbo.Monitor_Blocking (AlertId, EmailStatus, LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart,
+                        LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount)
+        SELECT @AlertId, 'debug', LeadingBlocker, DbName, HostName, ProgramName, LoginName, LoginTime, LastRequestStart,
+               LastRequestEnd, TransactionCnt, Command, WaitTime, WaitResource, SqlText, SqlStatement, BlockedSpidCount
+        FROM #LeadingBlocker lb
+        WHERE BlockedSpidCount >= COALESCE(@BlockedSessionThreshold,BlockedSpidCount);
+
         SELECT EmailBody = @EmailBody;
     END;
 END;
