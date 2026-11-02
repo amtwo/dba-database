@@ -59,6 +59,7 @@ END;
 
 DECLARE @MaxID bigint;
 DECLARE @ChunkID bigint;
+DECLARE @ChunkEndID bigint;
 DECLARE @Sql nvarchar(max);
 
 --Shuffle this into datetime datatype to make WAITFOR DELAY happy. Still use time on the param for better validation
@@ -81,15 +82,20 @@ EXEC sp_executesql @stmt = @sql, @params = N'@RetainDays int, @ChunkID bigint OU
 --
 --Now loop through those values and delete 
 --
-WHILE @ChunkID < @MaxID
-    BEGIN 
-        SELECT @ChunkID = @ChunkID + @ChunkSize;
-        
-        SELECT @sql = N'DELETE TOP (@ChunkSize) x FROM ' + @SqlObjectName + N' AS x WHERE x.' + QUOTENAME(@IDColumnName) + N' < @ChunkID AND x.' + QUOTENAME(@IDColumnName) + N' < @MaxID;'
+WHILE @ChunkID <= @MaxID
+    BEGIN
+        -- Use an inclusive boundary; decimal arithmetic avoids overflowing bigint in the final chunk.
+        SELECT @ChunkEndID = CONVERT(bigint,
+            CASE WHEN CONVERT(decimal(20,0), @ChunkID) + @ChunkSize - 1 > @MaxID
+                 THEN @MaxID
+                 ELSE CONVERT(decimal(20,0), @ChunkID) + @ChunkSize - 1
+            END);
+
+        SELECT @sql = N'DELETE TOP (@ChunkSize) x FROM ' + @SqlObjectName + N' AS x WHERE x.' + QUOTENAME(@IDColumnName) + N' <= @ChunkEndID AND x.' + QUOTENAME(@IDColumnName) + N' <= @MaxID;'
         --if we're not in debug mode, then run the delete
         IF @Debug = 0
             BEGIN
-                EXEC sp_executesql @stmt = @sql, @params = N'@ChunkSize int, @ChunkID bigint, @MaxID bigint', @ChunkSize = @ChunkSize, @ChunkID = @ChunkID, @MaxID = @MaxID;
+                EXEC sp_executesql @stmt = @sql, @params = N'@ChunkSize int, @ChunkEndID bigint, @MaxID bigint', @ChunkSize = @ChunkSize, @ChunkEndID = @ChunkEndID, @MaxID = @MaxID;
                 WAITFOR DELAY @LoopWaitDateTime;
             END;
         --if we're in debug mode, just print the DELETE statement
@@ -97,5 +103,10 @@ WHILE @ChunkID < @MaxID
             BEGIN
                 EXEC dbo.Debug_Print @DebugMessage = @sql;
             END;
+
+        IF @ChunkEndID = @MaxID
+            BREAK;
+
+        SELECT @ChunkID = @ChunkEndID + 1;
     END;
 GO
