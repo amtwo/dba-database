@@ -48,23 +48,23 @@ BEGIN
 END;
 
 
-DECLARE @Id int = 1,
-        @Spid int = 0,
+DECLARE @Id           int           = 1,
+        @Spid         int           = 0,
         @WaitResource nvarchar(256),
         @ResourceType varchar(8),
-        @DbName nvarchar(256),
-        @ObjectId int,
-        @SchemaName sysname,
-        @ObjectName nvarchar(256),
-        @IndexName nvarchar(256),
-        @IndexId int,
-        @HobtId bigint,
-        @FileId int,
-        @FileName sysname,
-        @PageId bigint,
-        @SlotId int,
+        @DbName       nvarchar(256),
+        @ObjectId     int,
+        @SchemaName   sysname,
+        @ObjectName   nvarchar(256),
+        @IndexName    nvarchar(256),
+        @IndexId      int,
+        @HobtId       bigint,
+        @FileId       int,
+        @FileName     sysname,
+        @PageId       bigint,
+        @SlotId       int,
         @BlockedRowId int,
-        @Sql nvarchar(max);
+        @Sql          nvarchar(max);
 
 CREATE TABLE #Blocked (
     ID int identity(1,1) PRIMARY KEY,
