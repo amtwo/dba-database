@@ -41,10 +41,11 @@ FROM (
             + REPLACE(
                 REPLACE(
                     REPLACE(
-                        REPLACE(CONVERT(nvarchar(max), @Text), @Token, m.Marker),
-                        N'&', N'&amp;'),
-                    N'<', N'&lt;'),
-                N'>', N'&gt;') COLLATE Latin1_General_BIN,
+                        REPLACE(
+                            REPLACE(CONVERT(nvarchar(max), @Text), @Token, m.Marker),
+                            N'&', N'&amp;'),
+                        N'<', N'&lt;'),
+                    N'>', N'&gt;') COLLATE Latin1_General_BIN,
                 m.Marker COLLATE Latin1_General_BIN,
                 N'</RowData><RowData>')
             + N'</RowData></XMLRoot>' AS XML)
