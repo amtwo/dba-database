@@ -27,6 +27,7 @@ MODIFICATIONS:
                           - If a procedure is running, this is the EXEC statement
     20171208 - AM2 - Add some functionality so that I can alert on number of sessions blocked.
     20171210 - AM2 - Add Debug Mode = 2 to return the Email Body as a chunk of HTML instead of emailing it.
+    20261101 - Cody - Decode TAB wait resources to object and index names.
 
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
@@ -258,6 +259,29 @@ BEGIN
         --Now populate the WaitDescription column
         UPDATE b
         SET WaitDescription = 'OBJECT WAIT: ' + @DbName + '.' + @ObjectName
+        FROM #Blocked b
+        WHERE WaitingSpid = @Spid;
+    END;
+    ELSE IF @WaitResource LIKE 'TAB:%'
+    BEGIN
+        --Decypher the database, object, and index portions of a table wait resource
+        SET @WaitResource = LTRIM(REPLACE(@WaitResource,'TAB:',''));
+        SET @DbName = DB_NAME(TRY_CONVERT(int, SUBSTRING(@WaitResource, 1, CHARINDEX(':', @WaitResource) - 1)));
+        SET @WaitResource = SUBSTRING(@WaitResource, CHARINDEX(':', @WaitResource) + 1, 256);
+        SET @ObjectName = NULL;
+        SET @IndexName = NULL;
+        SET @Sql = 'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + ''.'' + o.name, @IndexName = i.name ' +
+            'FROM ' + QUOTENAME(@DbName) + '.sys.objects o ' +
+            'LEFT JOIN ' + QUOTENAME(@DbName) + '.sys.indexes i ON o.object_id = i.object_id ' +
+            'AND i.index_id = TRY_CONVERT(int, SUBSTRING(@WaitResource, CHARINDEX('':'', @WaitResource) + 1, 256)) ' +
+            'WHERE o.object_id = TRY_CONVERT(int, SUBSTRING(@WaitResource, 1, CHARINDEX('':'', @WaitResource) - 1))';
+        EXEC sp_executesql @Sql,
+            N'@WaitResource nvarchar(256), @ObjectName nvarchar(256) OUT, @IndexName nvarchar(256) OUT',
+            @WaitResource = @WaitResource, @ObjectName = @ObjectName OUT, @IndexName = @IndexName OUT;
+        --Now populate the WaitDescription column
+        UPDATE b
+        SET WaitDescription = 'TAB WAIT: ' + @DbName + '.' + @ObjectName +
+            CASE WHEN @IndexName IS NULL THEN '' ELSE ' (Index: ' + @IndexName + ')' END
         FROM #Blocked b
         WHERE WaitingSpid = @Spid;
     END;
