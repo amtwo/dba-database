@@ -193,7 +193,7 @@ BEGIN
             @WindowEndSql      nvarchar(40) = QUOTENAME(CONVERT(nvarchar(35), @WindowEnd, 127), ''''),
             @DeltaWindowEndSql nvarchar(40) = COALESCE(QUOTENAME(CONVERT(nvarchar(35), @DeltaWindowEnd, 127), ''''), N'NULL');
 
-    SET @Command = N'
+    SET @Command = CONVERT(nvarchar(max), N'') + N'
 SET NOCOUNT ON;
 DECLARE @CurrentDatabase sysname = DB_NAME(),
         @WindowStart datetimeoffset(7) = ' + @WindowStartSql + N',
