@@ -12,7 +12,10 @@ CREATED: 20220920
        This procedure can be used to enable or disable Read-Only Routing on an Availability Group.
        Parameters allow you to optinally control a subset of replicas to modify the ROR list on.
        The read-only routing list can either be specified explicitly, or build dynamically based
-       on a naming convention.
+        on a naming convention.
+        The explicit routing-list order is preserved with dbo.fn_split. Keep this dependency until
+        the repository no longer supports SQL Server 2019; STRING_SPLIT's optional ordinal argument
+        is available only starting with SQL Server 2022.
        
        Note that the @RoutingListPattern and @RoutingListCSV parameters are mutually exclusive, 
        and you must supply exactly one of the two parameters. Supplying both or neither will
