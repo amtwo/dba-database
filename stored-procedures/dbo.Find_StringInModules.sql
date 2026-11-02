@@ -48,10 +48,6 @@ PARAMETERS
    @search_everything           Overrides all of the above bit parameters to 1.
    @debug                       Set to 1 if you just want print output of the commands.
 
-KNOWN ISSUES
-    The split function uses XML, so if @database_list contains a database name with non-XML-safe 
-    characters (e.g. < or &), the convert to XML will fail.
-    
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -153,7 +149,7 @@ SELECT [database]     = DB_NAME(),
  
   SET @c = cursor FORWARD_ONLY STATIC READ_ONLY FOR
     SELECT QUOTENAME(name) FROM sys.databases AS d
-      LEFT OUTER JOIN dbo.fn_split(@database_list, N',') AS s ON 1 = 1
+      LEFT OUTER JOIN STRING_SPLIT(@database_list, N',') AS s ON 1 = 1
       WHERE
       (
         LOWER(d.name) = LOWER(LTRIM(RTRIM(s.value)))

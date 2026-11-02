@@ -63,9 +63,10 @@ CREATE TABLE #FileSizeInfo
 
 
 --if no @OrderBy supplied or an invalid option, use DBName, LogicalFileName
-IF (@OrderBy IS NULL 
-    OR EXISTS (SELECT * FROM dbo.fn_split(REPLACE(REPLACE(@OrderBy,'ASC',''),'DESC',''),',')
-            WHERE value NOT IN (SELECT name FROM tempdb.sys.columns WHERE object_id = object_id('tempdb..#FileSizeInfo') )
+IF (@OrderBy IS NULL
+    OR @OrderBy = N''
+    OR EXISTS (SELECT 1 FROM STRING_SPLIT(REPLACE(REPLACE(@OrderBy,'ASC',''),'DESC',''), N',')
+            WHERE LTRIM(RTRIM(value)) NOT IN (SELECT name FROM tempdb.sys.columns WHERE object_id = object_id('tempdb..#FileSizeInfo'))
         ))
     SET @OrderBy = 'ServerName, DbName, LogicalFileName';
 
