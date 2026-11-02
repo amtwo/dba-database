@@ -33,31 +33,31 @@ BEGIN
 END
 GO
 
-IF COL_LENGTH('dbo.Monitor_Blocking', 'AlertId') IS NULL
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'AlertId')
     ALTER TABLE dbo.Monitor_Blocking ADD AlertId uniqueidentifier NULL;
 GO
 
-IF COL_LENGTH('dbo.Monitor_Blocking', 'AlertRecipients') IS NULL
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'AlertRecipients')
     ALTER TABLE dbo.Monitor_Blocking ADD AlertRecipients varchar(max) NULL;
 GO
 
-IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailAttemptDateTime') IS NULL
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailAttemptDateTime')
     ALTER TABLE dbo.Monitor_Blocking ADD EmailAttemptDateTime datetime2(3) NULL;
 GO
 
-IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailQueuedDateTime') IS NULL
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailQueuedDateTime')
     ALTER TABLE dbo.Monitor_Blocking ADD EmailQueuedDateTime datetime2(3) NULL;
 GO
 
-IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailStatus') IS NULL
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailStatus')
     ALTER TABLE dbo.Monitor_Blocking ADD EmailStatus varchar(16) NULL;
 GO
 
-IF COL_LENGTH('dbo.Monitor_Blocking', 'DatabaseMailItemId') IS NULL
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'DatabaseMailItemId')
     ALTER TABLE dbo.Monitor_Blocking ADD DatabaseMailItemId int NULL;
 GO
 
-IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailError') IS NULL
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailError')
     ALTER TABLE dbo.Monitor_Blocking ADD EmailError nvarchar(4000) NULL;
 GO
 
