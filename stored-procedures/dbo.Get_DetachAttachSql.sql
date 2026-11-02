@@ -48,10 +48,10 @@ BEGIN
     SET @ineachdb_sql = N'DECLARE @sql nvarchar(max) = N''CREATE DATABASE '' + QUOTENAME(DB_NAME()) + N''
                             ON '';
     
-                            SELECT @sql += N'' (FILENAME = '' + QUOTENAME(physical_name,CHAR(39)) + N''),'' + CHAR(13) + CHAR(10)
+                            SELECT @sql += N'' (FILENAME = N'' + NCHAR(39) + REPLACE(CONVERT(nvarchar(max), physical_name), NCHAR(39), NCHAR(39) + NCHAR(39)) + NCHAR(39) + N''),'' + CHAR(13) + CHAR(10)
                             FROM sys.database_files;
     
-                            SET @sql = LEFT(@sql,LEN(@sql)-1)
+                            SET @sql = LEFT(@sql,LEN(@sql)-3)
     
                             SET @sql += N'' FOR ATTACH;''
     
@@ -74,7 +74,7 @@ BEGIN
             SELECT 
                 DatabaseId  = database_id, 
                 DbName      = name, 
-                DetachSQL   = N'EXEC sp_detach_db @dbname = ' + QUOTENAME(name) + ', @skipchecks = ''true'';'
+                DetachSQL   = N'EXEC sp_detach_db @dbname = ' + QUOTENAME(name, NCHAR(39)) + N', @skipchecks = ''true'';'
             FROM sys.databases
             )
     SELECT a.DatabaseId, a.DbName, d.DetachSQL, a.AttachSql
