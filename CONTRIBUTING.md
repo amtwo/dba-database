@@ -118,6 +118,8 @@ You'll see this everywhere in the back catalog. **Don't copy it into new files**
 
 **Everything must be idempotent.** Run the installer twice, get the same result. Tables use `IF NOT EXISTS` create plus conditional `ALTER`s; data seeds use `IF NOT EXISTS` guards (see `dbo.Config.sql`); modules use `CREATE OR ALTER`. No file should ever error because it was already run once.
 
+**Prefer explicit conditions that read like prose.** When checking whether a named database object or column exists, query the catalog for that object instead of inferring its absence from a function's sentinel return value. For example, prefer `IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailStatus')` over `IF COL_LENGTH('dbo.Monitor_Blocking', 'EmailStatus') IS NULL`. The explicit check states what is being tested without requiring readers to remember what a `NULL` return means. Apply this preference wherever a direct condition makes the intent clearer.
+
 ### Evolving existing schemas
 
 A change inside an `IF NOT EXISTS` create block affects new installations only. If a schema fix must repair existing installations, add a rerunnable conditional `ALTER` to the same table script. The installer executes table scripts before loading dependent data.
@@ -161,7 +163,7 @@ MODIFICATIONS:
 Conventions inside the box:
 
 - **`CREATED:` uses `YYYYMMDD`.** Unambiguous, sorts correctly, and sidesteps every regional date-format argument. Same reason I never use date shorthand in code — see [date/time shorthand](https://sqlblog.org/2011/09/20/bad-habits-to-kick-using-shorthand-with-date-time-operations).
-- **`MODIFICATIONS:` is a running log**, newest entries appended, format `YYYYMMDD - AM2 - description`. Don't rewrite history; add a line.
+- **Use `MODIFICATIONS:` only for major changes.** Source control is the record for routine fixes and enhancements, so don't duplicate those in the header. For a major change, append a line in `YYYYMMDD - AM2 - description` format; don't rewrite earlier entries.
 - **`EXAMPLES:` should be real, runnable calls.** A future reader copy-pastes these. Make them work.
 - Keep the description honest about *assumptions*. If a proc assumes the First Responder Kit is installed, or that you're sysadmin, say so.
 
@@ -215,6 +217,14 @@ You'll spot two violations in the repo: the `Agent_Upsert_*` procs use `snake_ca
       @RowCountThreshold   bigint        = 10000000,    -- N rule: >= N rows uses sampled update
       @GiantSamplePercent  tinyint       = 50,          -- Sample percent when table is huge
       @OnlySuspicious      bit           = 0,           -- 1 = only rows that may need action
+  ```
+
+- **Align multi-variable `DECLARE` blocks** so the data types and any initial values line up in tidy columns. Keep the variable names in one column, types in another, and initializers in a third when present:
+
+  ```sql
+  DECLARE @Id           int           = 1,
+          @WaitResource nvarchar(256),
+          @ObjectName   nvarchar(256);
   ```
 
 - **Terminate statements with semicolons.** They're not optional anymore in spirit, and several T-SQL features (CTEs, `THROW`, Service Broker) flat-out require them. Get in the habit.
