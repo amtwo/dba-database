@@ -313,6 +313,23 @@ AND EXISTS (SELECT 1 FROM #Blocked b1 WHERE b1.BlockingSpid = b.WaitingSpid);
 
 DELETE FROM #Blocked WHERE BlockingSpid = 0;
 
+-- Represent special negative blocker IDs as roots so their waiters remain in the report.
+INSERT INTO #LeadingBlocker (LeadingBlocker, DbName, HostName, ProgramName, LoginName, Command)
+SELECT DISTINCT b.BlockingSpid,
+       'SYSTEM',
+       'SQL Server',
+       CASE b.BlockingSpid
+           WHEN -2 THEN 'Orphaned distributed transaction'
+           WHEN -3 THEN 'Deferred recovery transaction'
+           WHEN -4 THEN 'Latch owner could not be determined'
+           WHEN -5 THEN 'Asynchronous action'
+           ELSE 'Unknown system blocker'
+       END,
+       'SYSTEM',
+       'SYSTEM'
+FROM #Blocked b
+WHERE b.BlockingSpid < 0;
+
 --Update #Blocked to include LeadingBlocker & BlockingChain
 WITH BlockingChain AS (
     SELECT LeadingBlocker AS Spid, 

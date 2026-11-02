@@ -16,12 +16,13 @@ CREATED: 20141218
     Log the lead blocker to a table (only when not in @Debug mode).
     @Debug parameter controls whether to email blocking to @EmailRecipients or to output resultset.
     @EmailThreshold throttles email so that the server only sends email every N minutes.
+    Set @EmailThreshold to 0 to disable email throttling; negative values are invalid.
 
 PARAMETERS
 * @BlockingDurationThreshold - seconds - Alters on blocked sessions that have been waiting longer than this many seconds.
 * @BlockedSessionThreshold - Alert on blocking only when the number of blocked sessions is this number of higher.
 * @EmailRecipients   - delimited list of email addresses. Used for sending email alert.
-* @EmailThreshold    - minutes - Only send an email every this many minutes.
+* @EmailThreshold    - minutes - Only send an email every this many minutes; 0 disables throttling.
 * @Debug             - Supress sending email & output a resultset instead
                           0 = Send email
                           1 = Suppress sending emails and suppress logging to dbo.Monitor_Blocking
@@ -60,6 +61,12 @@ IF ((@BlockingDurationThreshold IS NOT NULL AND @BlockedSessionThreshold IS NOT 
     OR COALESCE(@BlockingDurationThreshold,@BlockedSessionThreshold) IS NULL)
 BEGIN
     RAISERROR('Must supply either @BlockingDurationThreshold or @BlockedSessionThreshold (but not both).',16,1);
+    RETURN;
+END;
+
+IF @EmailThreshold < 0
+BEGIN
+    RAISERROR('@EmailThreshold must be 0 or greater.',16,1);
     RETURN;
 END;
 
@@ -333,6 +340,23 @@ AND EXISTS (SELECT 1 FROM #Blocked b1 WHERE b1.BlockingSpid = b.WaitingSpid);
 
 DELETE FROM #Blocked WHERE BlockingSpid = 0;
 
+-- Represent special negative blocker IDs as roots so their waiters remain in the report.
+INSERT INTO #LeadingBlocker (LeadingBlocker, DbName, HostName, ProgramName, LoginName, Command)
+SELECT DISTINCT b.BlockingSpid,
+       'SYSTEM',
+       'SQL Server',
+       CASE b.BlockingSpid
+           WHEN -2 THEN 'Orphaned distributed transaction'
+           WHEN -3 THEN 'Deferred recovery transaction'
+           WHEN -4 THEN 'Latch owner could not be determined'
+           WHEN -5 THEN 'Asynchronous action'
+           ELSE 'Unknown system blocker'
+       END,
+       'SYSTEM',
+       'SYSTEM'
+FROM #Blocked b
+WHERE b.BlockingSpid < 0;
+
 --Update #Blocked to include LeadingBlocker & BlockingChain
 WITH BlockingChain AS (
     SELECT LeadingBlocker AS Spid, 
@@ -379,7 +403,7 @@ SET SessionInfo = '<span style="font-weight:bold">Login = </span>' + dbo.HtmlEnc
                     THEN '<span style="font-weight:bold">DbName = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(DbName)) + '<br>'
                     ELSE ''
                   END +
-                  '<span style="font-weight:bold">Last Request = </span>' + CONVERT(varchar(20),LastRequestStart,20) + '<br>' +
+                  '<span style="font-weight:bold">Last Request = </span>' + COALESCE(CONVERT(varchar(20),LastRequestStart,20),'N/A') + '<br>' +
                   '<span style="font-weight:bold">Program Name = </span>' + dbo.HtmlEncode_Get(dbo.XmlSafeText_Get(ProgramName)) + '<br>'
 FROM #LeadingBlocker lb;
 
@@ -431,7 +455,8 @@ END;
 
 --Check EmailThreshold before continuing. RETURN within @EmailThreshold
 -- should this check be at the top of the alert?
-IF EXISTS (SELECT 1 FROM dbo.Monitor_Blocking WHERE LogDateTime >= DATEADD(mi,-1*@EmailThreshold,GETDATE()))
+IF @EmailThreshold > 0
+AND EXISTS (SELECT 1 FROM dbo.Monitor_Blocking WHERE LogDateTime >= DATEADD(mi,-1*@EmailThreshold,GETDATE()))
 BEGIN
     RETURN(0);
 END;
