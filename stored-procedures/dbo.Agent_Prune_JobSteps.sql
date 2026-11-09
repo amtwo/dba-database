@@ -41,11 +41,40 @@ BEGIN
         RETURN;
     END;
 
+    CREATE TABLE #sysjobsteps
+    (
+        step_id              INT,
+        step_name            SYSNAME,
+        subsystem            NVARCHAR(40),
+        command              NVARCHAR(MAX),
+        flags                INT,
+        cmdexec_success_code INT,
+        on_success_action    TINYINT,
+        on_success_step_id   INT,
+        on_fail_action       TINYINT,
+        on_fail_step_id      INT,
+        server               NVARCHAR(128),
+        database_name        NVARCHAR(128),
+        database_user_name   NVARCHAR(128),
+        retry_attempts       INT,
+        retry_interval       INT,
+        os_run_priority      INT,
+        output_file_name     NVARCHAR(200),
+        last_run_outcome     INT,
+        last_run_duration    INT,
+        last_run_retries     INT,
+        last_run_date        INT,
+        last_run_time        INT,
+        proxy_id             INT
+    );
+
+    INSERT INTO #sysjobsteps
+    EXEC msdb.dbo.sp_help_jobstep @job_id = @job_id;
+
     DECLARE steps_to_prune CURSOR LOCAL STATIC READ_ONLY FOR
         SELECT step_id
-        FROM msdb.dbo.sysjobsteps
-        WHERE job_id = @job_id
-          AND step_id > @retain_step_number
+        FROM #sysjobsteps
+        WHERE step_id > @retain_step_number
         ORDER BY step_id DESC;
 
     OPEN steps_to_prune;
