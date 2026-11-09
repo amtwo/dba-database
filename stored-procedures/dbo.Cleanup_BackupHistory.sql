@@ -27,6 +27,13 @@ MODIFICATIONS:
  BEGIN
    SET NOCOUNT ON;
 
+   -- This procedure owns its cleanup transaction.
+   IF @@TRANCOUNT <> 0
+   BEGIN
+       RAISERROR('Run Cleanup_BackupHistory outside an existing transaction.', 16, 1);
+       RETURN;
+   END;
+
    CREATE TABLE #backup_set_id      (backup_set_id INT PRIMARY KEY CLUSTERED);
    CREATE TABLE #media_set_id       (media_set_id INT PRIMARY KEY CLUSTERED);
    CREATE TABLE #restore_history_id (restore_history_id INT PRIMARY KEY CLUSTERED);
@@ -47,69 +54,55 @@ MODIFICATIONS:
    WHERE backup_set_id IN (SELECT backup_set_id
                            FROM   #backup_set_id);
 
-   BEGIN TRANSACTION;
+   BEGIN TRY
+       BEGIN TRANSACTION;
 
-   DELETE FROM msdb.dbo.backupfile
-   WHERE backup_set_id IN (SELECT backup_set_id
-                           FROM   #backup_set_id);
-   IF (@@error > 0)
-     GOTO Quit;
+       DELETE FROM msdb.dbo.backupfile
+       WHERE backup_set_id IN (SELECT backup_set_id
+                               FROM   #backup_set_id);
 
-   DELETE FROM msdb.dbo.backupfilegroup
-   WHERE backup_set_id IN (SELECT backup_set_id
-                           FROM   #backup_set_id);
-   IF (@@error > 0)
-     GOTO Quit;
+       DELETE FROM msdb.dbo.backupfilegroup
+       WHERE backup_set_id IN (SELECT backup_set_id
+                               FROM   #backup_set_id);
 
-   DELETE FROM msdb.dbo.restorefile
-   WHERE restore_history_id IN (SELECT restore_history_id
-                                FROM   #restore_history_id);
-   IF (@@error > 0)
-     GOTO Quit;
+       DELETE FROM msdb.dbo.restorefile
+       WHERE restore_history_id IN (SELECT restore_history_id
+                                    FROM   #restore_history_id);
 
-   DELETE FROM msdb.dbo.restorefilegroup
-   WHERE restore_history_id IN (SELECT restore_history_id
-                                FROM   #restore_history_id);
-   IF (@@error > 0)
-     GOTO Quit;
+       DELETE FROM msdb.dbo.restorefilegroup
+       WHERE restore_history_id IN (SELECT restore_history_id
+                                    FROM   #restore_history_id);
 
-   DELETE FROM msdb.dbo.restorehistory
-   WHERE restore_history_id IN (SELECT restore_history_id
-                                FROM   #restore_history_id);
-   IF (@@error > 0)
-     GOTO Quit;
+       DELETE FROM msdb.dbo.restorehistory
+       WHERE restore_history_id IN (SELECT restore_history_id
+                                    FROM   #restore_history_id);
 
-   DELETE FROM msdb.dbo.backupset
-   WHERE backup_set_id IN (SELECT backup_set_id
-                           FROM   #backup_set_id);
-   IF (@@error > 0)
-     GOTO Quit;
+       DELETE FROM msdb.dbo.backupset
+       WHERE backup_set_id IN (SELECT backup_set_id
+                               FROM   #backup_set_id);
 
-   DELETE msdb.dbo.backupmediafamily
-   FROM msdb.dbo.backupmediafamily bmf
-   WHERE bmf.media_set_id IN (SELECT media_set_id
-                              FROM   #media_set_id)
-     AND ((SELECT COUNT(*)
-           FROM msdb.dbo.backupset
-           WHERE media_set_id = bmf.media_set_id) = 0);
-   IF (@@error > 0)
-     GOTO Quit;
+       DELETE msdb.dbo.backupmediafamily
+       FROM msdb.dbo.backupmediafamily bmf
+       WHERE bmf.media_set_id IN (SELECT media_set_id
+                                  FROM   #media_set_id)
+         AND ((SELECT COUNT(*)
+               FROM msdb.dbo.backupset
+               WHERE media_set_id = bmf.media_set_id) = 0);
 
-   DELETE msdb.dbo.backupmediaset
-   FROM msdb.dbo.backupmediaset bms
-   WHERE bms.media_set_id IN (SELECT media_set_id
-                              FROM   #media_set_id)
-     AND ((SELECT COUNT(*)
-           FROM msdb.dbo.backupset
-           WHERE media_set_id = bms.media_set_id) = 0);
-   IF (@@error > 0)
-     GOTO Quit;
+       DELETE msdb.dbo.backupmediaset
+       FROM msdb.dbo.backupmediaset bms
+       WHERE bms.media_set_id IN (SELECT media_set_id
+                                  FROM   #media_set_id)
+         AND ((SELECT COUNT(*)
+               FROM msdb.dbo.backupset
+               WHERE media_set_id = bms.media_set_id) = 0);
 
-   COMMIT TRANSACTION;
-   RETURN;
-
- Quit:
-   ROLLBACK TRANSACTION;
-
+       COMMIT TRANSACTION;
+   END TRY
+   BEGIN CATCH
+       IF XACT_STATE() <> 0
+           ROLLBACK TRANSACTION;
+       THROW;
+   END CATCH;
  END
  GO
