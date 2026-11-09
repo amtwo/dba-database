@@ -54,14 +54,16 @@ BEGIN
 
 --
     DECLARE @StatementFullText  nvarchar(max);
-    DECLARE @ProcedureFQN       nvarchar(1000);
+    DECLARE @ProcedureFQN       nvarchar(776);
+    DECLARE @ModuleName         nvarchar(517);
     DECLARE @Sql                nvarchar(max);
     DECLARE @ExistingGuide      bit;
     
     --TODO check if a plan guide with this name already exists;
 
     SET @StatementMatchText += N'%';
-    SET @ProcedureFQN = QUOTENAME(@DbName) + '.' + QUOTENAME(@ProcedureSchema) + '.' + QUOTENAME(@ProcedureName);
+    SET @ModuleName = QUOTENAME(@ProcedureSchema) + N'.' + QUOTENAME(@ProcedureName);
+    SET @ProcedureFQN = QUOTENAME(@DbName) + N'.' + @ModuleName;
 
     DROP TABLE IF EXISTS #QueryDetails;
     CREATE TABLE #QueryDetails(
@@ -90,13 +92,13 @@ BEGIN
     WHERE StatementText LIKE @StatementMatchText;
 
     --TODO need to handle cases where there are != 1 rows returned.
-    IF (SELECT COUNT(DISTINCT StatementText) FROM #QueryDetails) > 1
+    IF (SELECT COUNT(DISTINCT CONVERT(varbinary(max), StatementText)) FROM #QueryDetails) > 1
     BEGIN
         SELECT * FROM #QueryDetails;
         THROW 60000, 'There are multiple statements that match this @StatementMatchText. Please be more specific. @StatementMatchText must return exactly 1 row.',1;
     END;
 
-    IF (SELECT COUNT(DISTINCT StatementText) FROM #QueryDetails) = 0
+    IF (SELECT COUNT(DISTINCT CONVERT(varbinary(max), StatementText)) FROM #QueryDetails) = 0
     BEGIN
         SELECT * FROM #QueryDetails;
         THROW 60001, 'There are zero statements that match this criteria. Criteria must return exactly 1 row from the plan cache.',1;
@@ -118,9 +120,9 @@ BEGIN
     END;
 
     --Check for existing guides & drop/continue/error based on existence & @DropExisting
-    SET @sql = 'SELECT @ExistingGuide = COUNT(*) FROM ' + QUOTENAME(@DbName) + '.sys.plan_guides WHERE name = @PlanGuideName;'
+    SET @sql = 'SELECT @ExistingGuide = CONVERT(bit, COUNT(*)) FROM ' + QUOTENAME(@DbName) + '.sys.plan_guides WHERE name = @PlanGuideName;'
     EXEC sys.sp_executesql @stmt = @sql, 
-                        @params = N'@PlanGuideName sysname, @ExistingGuide int OUT', 
+                        @params = N'@PlanGuideName sysname, @ExistingGuide bit OUT',
                         @PlanGuideName = @PlanGuideName,
                         @ExistingGuide = @ExistingGuide OUT;
 
@@ -133,46 +135,49 @@ BEGIN
         THROW 60002, 'An existing Plan Guide already exists with this name. Choose a new name or use @DropExisting=1.', 1;
     END;
 
-    IF (@ExistingGuide = 1 AND @DropExisting = 1)
+    -- Use one batch in the target database so a failed replacement can roll back the drop.
+    SET @Sql = N'
+IF @ExistingGuide = 1
+    EXEC sys.sp_control_plan_guide N''DROP'', @PlanGuideName;
+
+EXEC sys.sp_create_plan_guide
+    @name = @PlanGuideName,
+    @stmt = @StatementFullText,
+    @type = N''OBJECT'',
+    @module_or_batch = @ModuleName,
+    @params = NULL,
+    @hints = @HintText;';
+
+    IF @Debug = 1
     BEGIN
-        SET @sql = 'EXEC ' + QUOTENAME(@DbName) + '.sys.sp_control_plan_guide N''DROP'', @PlanGuideName;';
-        
-        IF (@Debug = 0)
-        BEGIN
-            EXEC sys.sp_executesql @stmt = @sql, 
-                        @params = N'@PlanGuideName sysname', 
-                        @PlanGuideName = @PlanGuideName;
-        END;
-        IF (@Debug = 1)
-        BEGIN
-            EXEC dbo.Debug_Print @DebugMessage = @sql;
-            PRINT '@PlanGuideName = ' + @PlanGuideName;
-        END;
+        EXEC dbo.Debug_Print @DebugMessage = @Sql;
+        SELECT ModuleName = @ModuleName, PlanGuideName = @PlanGuideName, DropExisting = @ExistingGuide;
+        RETURN;
     END;
 
-    --OK, now finally create the plan guide!
-    SET @sql = 'EXEC ' + QUOTENAME(@DbName) + '.sys.sp_create_plan_guide   
-            @name =  @PlanGuideName,  
-            @stmt = @StatementFullText,  
-            @type = N''OBJECT'',  
-            @module_or_batch = @ProcedureName,  
-            @params = NULL,  
-            @hints = @HintText;'
+    IF @@TRANCOUNT <> 0
+        THROW 60003, 'Run this procedure outside an existing transaction.', 1;
 
-    IF (@Debug = 1)
-    BEGIN
-        EXEC dbo.Debug_Print @DebugMessage = @sql;
-    END;
-    IF (@Debug = 0)
-    BEGIN
-        EXEC sys.sp_executesql
-                    @stmt                = @sql,
-                    @params              = N'@PlanGuideName sysname, @StatementFullText nvarchar(max), @ProcedureName sysname, @HintText nvarchar(1000)',
-                    @PlanGuideName       = @PlanGuideName,
-                    @StatementFullText   = @StatementFullText,
-                    @ProcedureName       = @ProcedureName,
-                    @HintText            = @HintText;
-    END;
+    DECLARE @DatabaseExec nvarchar(300) = QUOTENAME(@DbName) + N'.sys.sp_executesql';
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        EXEC @DatabaseExec @Sql,
+            N'@PlanGuideName sysname, @StatementFullText nvarchar(max), @ModuleName nvarchar(517),
+              @HintText nvarchar(1000), @ExistingGuide bit',
+            @PlanGuideName = @PlanGuideName,
+            @StatementFullText = @StatementFullText,
+            @ModuleName = @ModuleName,
+            @HintText = @HintText,
+            @ExistingGuide = @ExistingGuide;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
 END;
-
 GO
