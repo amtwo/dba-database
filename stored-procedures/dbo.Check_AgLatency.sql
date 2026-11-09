@@ -13,7 +13,8 @@ AS
 AUTHOR: Andy Mallon
 CREATED: 20140409
        This Alert checks AG latency (unsent logs). 
-       Latency is based on the worst reported condition from both DMVs & perfmon.
+       Queue size is the larger available measurement from replica DMVs and local counters.
+       Returns one row per database replica. Queue size and commit lag can be NULL when unavailable.
 
 PARAMETERS
 * @Threshold - Default 0 - Minimum unsent log KB. Zero includes unavailable queue measurements.
@@ -54,7 +55,7 @@ CREATE TABLE #Results (
 WITH ReplicaStatus AS (
     SELECT ar.replica_server_name AS ServerName,
            ag.name AS AgName,
-           adc.database_name AS DbName,
+           COALESCE(adc.database_name, DB_NAME(ds.database_id)) AS DbName,
            ds.group_id AS GroupId,
            ds.group_database_id AS GroupDatabaseId,
            ds.is_local AS IsLocal,
@@ -70,7 +71,7 @@ WITH ReplicaStatus AS (
     FROM sys.dm_hadr_database_replica_states AS ds
     JOIN sys.availability_groups AS ag ON ag.group_id = ds.group_id
     JOIN sys.availability_replicas AS ar ON ar.group_id = ds.group_id AND ar.replica_id = ds.replica_id
-    JOIN sys.availability_databases_cluster AS adc
+    LEFT JOIN sys.availability_databases_cluster AS adc
         ON adc.group_id = ds.group_id AND adc.group_database_id = ds.group_database_id
 )
 INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason,
@@ -104,6 +105,7 @@ OUTER APPLY (
     SELECT MAX(pc.cntr_value) AS QueueKb
     FROM sys.dm_os_performance_counters AS pc
     WHERE r.IsLocal = 1
+      AND r.IsPrimary = 0
       AND pc.object_name LIKE N'%:Database Replica'
       AND pc.counter_name = N'Log Send Queue'
       AND LTRIM(RTRIM(pc.instance_name)) = r.DbName COLLATE DATABASE_DEFAULT
