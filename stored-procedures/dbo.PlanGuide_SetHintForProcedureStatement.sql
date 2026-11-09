@@ -51,15 +51,16 @@ PARAMETERS
 
 SET NOCOUNT ON;
 
-IF @Debug IS NULL OR @DropExisting IS NULL
+IF ISNULL(@Debug, 0) = 0 AND (@@TRANCOUNT <> 0 OR (@@OPTIONS & 2) = 2)
 BEGIN
-    RAISERROR('@Debug and @DropExisting must be 0 or 1.', 16, 1);
+    SET XACT_ABORT OFF;
+    RAISERROR('Run this procedure without an existing or implicit transaction.', 16, 1);
     RETURN;
 END;
 
-IF @Debug = 0 AND (@@TRANCOUNT <> 0 OR (@@OPTIONS & 2) = 2)
+IF @Debug IS NULL OR @DropExisting IS NULL
 BEGIN
-    RAISERROR('Run this procedure without an existing or implicit transaction.', 16, 1);
+    RAISERROR('@Debug and @DropExisting must be 0 or 1.', 16, 1);
     RETURN;
 END;
 
