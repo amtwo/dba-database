@@ -28,9 +28,9 @@ MODIFICATIONS:
    SET NOCOUNT ON;
 
    -- This procedure owns its cleanup transaction.
-   IF @@TRANCOUNT <> 0
+   IF @@TRANCOUNT <> 0 OR (@@OPTIONS & 2) = 2
    BEGIN
-       RAISERROR('Run Cleanup_BackupHistory outside an existing transaction.', 16, 1);
+       RAISERROR('Run Cleanup_BackupHistory without an existing or implicit transaction.', 16, 1);
        RETURN;
    END;
 

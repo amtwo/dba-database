@@ -27,6 +27,12 @@ MODIFICATIONS:
 *************************************************************************************************/
 SET NOCOUNT ON;
 
+IF @@TRANCOUNT <> 0 OR (@@OPTIONS & 2) = 2
+BEGIN
+    RAISERROR('Run Cleanup_Msdb without an existing or implicit transaction.', 16, 1);
+    RETURN;
+END;
+
 DECLARE @RetainDate datetime2;
 
 SELECT @RetainDate = DATEADD(DAY,-1*@RetainDays,SYSDATETIME());
