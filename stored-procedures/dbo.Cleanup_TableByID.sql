@@ -22,7 +22,7 @@ CREATED: 20171012
     The ID is used for efficiency when doing deletes, and the date/time column is needed to
     determine when data ages out. 
         **The date/time column should be the date inserted**
-          The code assumes that both the ID & date/time columns are ever-increasing.
+          Every delete checks the same retention cutoff, even when IDs and timestamps are out of order.
     This includes two controls to help minimize blocking and prevent the transaction log from
     growing during a large data cleanup. These two params can be adjusted to fine-tune the cleanup
        @ChunkSize controls how the max size of each delete operation.
@@ -57,56 +57,56 @@ BEGIN
     RETURN;
 END;
 
-DECLARE @MaxID bigint;
-DECLARE @ChunkID bigint;
-DECLARE @ChunkEndID bigint;
-DECLARE @Sql nvarchar(max);
+IF @RetainDays IS NULL OR @RetainDays < 0
+BEGIN
+    RAISERROR('@RetainDays must be zero or greater.', 16, 1);
+    RETURN;
+END;
 
---Shuffle this into datetime datatype to make WAITFOR DELAY happy. Still use time on the param for better validation
-DECLARE @LoopWaitDateTime datetime = @LoopWaitTime;
---Plop the quoted DB.Schema.Table into one variable so I don't screw it up later.
-DECLARE @SqlObjectName nvarchar(386) = QUOTENAME(@DbName) + N'.' + QUOTENAME(@SchemaName) + N'.' + QUOTENAME(@TableName);
+DECLARE @Cutoff           datetime = DATEADD(DAY, -@RetainDays, GETDATE()),
+        @MaxID            bigint,
+        @RowsDeleted      int,
+        @Sql              nvarchar(max),
+        @LoopWaitDateTime datetime = @LoopWaitTime,
+        @SqlObjectName    nvarchar(776) = QUOTENAME(@DbName) + N'.' + QUOTENAME(@SchemaName) + N'.' + QUOTENAME(@TableName),
+        @QuotedID         nvarchar(258) = QUOTENAME(@IDColumnName),
+        @QuotedDate       nvarchar(258) = QUOTENAME(@DateColumnName);
 
---
--- Get the range of ID values we want to delete
---
-SELECT @sql = N'SELECT @ChunkID = MIN(' + QUOTENAME(@IDColumnName) + N'), @MaxID = MAX(' + QUOTENAME(@IDColumnName) + N') FROM ' + @SqlObjectName + N' WHERE ' + QUOTENAME(@DateColumnName) + ' < DATEADD(DAY,-1*@RetainDays,GETDATE());';
+SET @Sql = N'SELECT @MaxID = MAX(' + @QuotedID + N')
+FROM ' + @SqlObjectName + N'
+WHERE ' + @QuotedDate + N' < @Cutoff;';
+EXEC sys.sp_executesql @Sql, N'@Cutoff datetime, @MaxID bigint OUTPUT',
+    @Cutoff = @Cutoff, @MaxID = @MaxID OUTPUT;
+
+IF @MaxID IS NULL
+    RETURN;
+
+SET @Sql = N';WITH Batch AS (
+    SELECT TOP (@ChunkSize) ' + @QuotedID + N'
+    FROM ' + @SqlObjectName + N'
+    WHERE ' + @QuotedID + N' <= @MaxID
+      AND ' + @QuotedDate + N' < @Cutoff
+    ORDER BY ' + @QuotedID + N'
+)
+DELETE FROM Batch;
+SET @RowsDeleted = @@ROWCOUNT;';
 
 IF @Debug = 1
 BEGIN
-    EXEC dbo.Debug_Print @DebugMessage = @sql;
+    EXEC dbo.Debug_Print @DebugMessage = @Sql;
+    SELECT Cutoff = @Cutoff, MaxID = @MaxID, ChunkSize = @ChunkSize;
+    RETURN;
 END;
--- Even in Debug mode, we run this to get min/max values. We're not changing data yet.
-EXEC sp_executesql @stmt = @sql, @params = N'@RetainDays int, @ChunkID bigint OUT, @MaxID bigint OUT', @RetainDays = @RetainDays, @ChunkID = @ChunkID OUT, @MaxID = @MaxID OUT;
 
---
---Now loop through those values and delete 
---
-WHILE @ChunkID <= @MaxID
-    BEGIN
-        -- Use an inclusive boundary; decimal arithmetic avoids overflowing bigint in the final chunk.
-        SELECT @ChunkEndID = CONVERT(bigint,
-            CASE WHEN CONVERT(decimal(20,0), @ChunkID) + @ChunkSize - 1 > @MaxID
-                 THEN @MaxID
-                 ELSE CONVERT(decimal(20,0), @ChunkID) + @ChunkSize - 1
-            END);
+WHILE 1 = 1
+BEGIN
+    EXEC sys.sp_executesql @Sql,
+        N'@Cutoff datetime, @MaxID bigint, @ChunkSize int, @RowsDeleted int OUTPUT',
+        @Cutoff = @Cutoff, @MaxID = @MaxID, @ChunkSize = @ChunkSize, @RowsDeleted = @RowsDeleted OUTPUT;
 
-        SELECT @sql = N'DELETE TOP (@ChunkSize) x FROM ' + @SqlObjectName + N' AS x WHERE x.' + QUOTENAME(@IDColumnName) + N' <= @ChunkEndID AND x.' + QUOTENAME(@IDColumnName) + N' <= @MaxID;'
-        --if we're not in debug mode, then run the delete
-        IF @Debug = 0
-            BEGIN
-                EXEC sp_executesql @stmt = @sql, @params = N'@ChunkSize int, @ChunkEndID bigint, @MaxID bigint', @ChunkSize = @ChunkSize, @ChunkEndID = @ChunkEndID, @MaxID = @MaxID;
-                WAITFOR DELAY @LoopWaitDateTime;
-            END;
-        --if we're in debug mode, just print the DELETE statement
-        ELSE
-            BEGIN
-                EXEC dbo.Debug_Print @DebugMessage = @sql;
-            END;
+    IF @RowsDeleted < @ChunkSize
+        BREAK;
 
-        IF @ChunkEndID = @MaxID
-            BREAK;
-
-        SELECT @ChunkID = @ChunkEndID + 1;
-    END;
+    WAITFOR DELAY @LoopWaitDateTime;
+END;
 GO
