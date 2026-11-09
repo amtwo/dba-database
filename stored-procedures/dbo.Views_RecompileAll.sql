@@ -32,22 +32,27 @@ MODIFICATIONS:
 *************************************************************************************************/
 SET NOCOUNT ON;
 
-DECLARE @Sql nvarchar(max);
+DECLARE @Sql           nvarchar(max),
+        @DatabaseExec  nvarchar(300),
+        @RecompileProc nvarchar(300),
+        @ViewName      nvarchar(517);
 
 
 CREATE TABLE #Commands (
-    Cmd nvarchar(max)
+    DbName sysname,
+    ViewName nvarchar(517)
     )
 
-DECLARE db_cur CURSOR FOR
+DECLARE db_cur CURSOR LOCAL FAST_FORWARD FOR
     SELECT name AS DbName
     FROM sys.databases 
-    WHERE dbo.dm_hadr_db_role(name) IN ('PRIMARY','ONLINE')
-    AND name = COALESCE(@DbName,name);
+    WHERE state_desc = N'ONLINE'
+      AND HAS_DBACCESS(name) = 1
+      AND (replica_id IS NULL OR sys.fn_hadr_is_primary_replica(name) = 1)
+      AND (@DbName IS NULL OR name = @DbName);
 
-DECLARE cmd_cur CURSOR FOR
-    SELECT Cmd
-    FROM #Commands;
+DECLARE cmd_cur CURSOR LOCAL FAST_FORWARD FOR
+    SELECT DbName, ViewName FROM #Commands;
 
 
 --Build commands one Db at a time, store in #Commands table
@@ -56,11 +61,15 @@ FETCH NEXT FROM db_cur INTO @DbName;
 
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    SET @Sql = 'SELECT ''EXEC ' + @DbName + '.sys.sp_recompile '''''' + name + '''''';'' FROM [' + @DbName + '].sys.objects WHERE type = ''V'' AND is_ms_shipped = 0;';
-    
-    INSERT INTO #Commands (Cmd)
-    EXEC sp_executesql @Sql
-    
+    SET @DatabaseExec = QUOTENAME(@DbName) + N'.sys.sp_executesql';
+    SET @Sql = N'SELECT DB_NAME(), QUOTENAME(s.name) + N''.'' + QUOTENAME(v.name)
+        FROM sys.views AS v
+        JOIN sys.schemas AS s ON s.schema_id = v.schema_id
+        WHERE v.is_ms_shipped = 0;';
+
+    INSERT INTO #Commands (DbName, ViewName)
+    EXEC @DatabaseExec @Sql;
+
     FETCH NEXT FROM db_cur INTO @DbName;
 END;
 
@@ -71,20 +80,23 @@ DEALLOCATE db_cur;
 IF @Debug = 1
 BEGIN
     --If Debug mode, just select out the commands.
-    SELECT Cmd FROM #Commands;
+    SELECT Cmd = N'EXEC ' + QUOTENAME(DbName) + N'.sys.sp_recompile @objname = N'''
+               + REPLACE(ViewName, N'''', N'''''') + N''';'
+    FROM #Commands;
 END;
 ELSE
 BEGIN
     --Otherwise, execute them
     OPEN cmd_cur;
-    FETCH NEXT FROM cmd_cur INTO @Sql;
+    FETCH NEXT FROM cmd_cur INTO @DbName, @ViewName;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
     
-        EXEC sp_executesql @Sql
+        SET @RecompileProc = QUOTENAME(@DbName) + N'.sys.sp_recompile';
+        EXEC @RecompileProc @objname = @ViewName;
         
-        FETCH NEXT FROM cmd_cur INTO @Sql;
+        FETCH NEXT FROM cmd_cur INTO @DbName, @ViewName;
     END;
 
     CLOSE cmd_cur;
