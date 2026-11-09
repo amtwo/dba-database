@@ -50,6 +50,19 @@ PARAMETERS
 
 
 SET NOCOUNT ON;
+
+IF @Debug IS NULL OR @DropExisting IS NULL
+BEGIN
+    RAISERROR('@Debug and @DropExisting must be 0 or 1.', 16, 1);
+    RETURN;
+END;
+
+IF @Debug = 0 AND (@@TRANCOUNT <> 0 OR (@@OPTIONS & 2) = 2)
+BEGIN
+    RAISERROR('Run this procedure without an existing or implicit transaction.', 16, 1);
+    RETURN;
+END;
+
 BEGIN
 
 --
@@ -137,16 +150,23 @@ BEGIN
 
     -- Use one batch in the target database so a failed replacement can roll back the drop.
     SET @Sql = N'
-IF @ExistingGuide = 1
-    EXEC sys.sp_control_plan_guide N''DROP'', @PlanGuideName;
+DECLARE @ReturnCode int;
+IF @DropExisting = 1 AND EXISTS (SELECT 1 FROM sys.plan_guides WHERE name = @PlanGuideName)
+BEGIN
+    EXEC @ReturnCode = sys.sp_control_plan_guide N''DROP'', @PlanGuideName;
+    IF @ReturnCode <> 0
+        THROW 60003, ''Could not drop the existing plan guide.'', 1;
+END;
 
-EXEC sys.sp_create_plan_guide
+EXEC @ReturnCode = sys.sp_create_plan_guide
     @name = @PlanGuideName,
     @stmt = @StatementFullText,
     @type = N''OBJECT'',
     @module_or_batch = @ModuleName,
     @params = NULL,
-    @hints = @HintText;';
+    @hints = @HintText;
+IF @ReturnCode <> 0
+    THROW 60004, ''Could not create the requested plan guide.'', 1;';
 
     IF @Debug = 1
     BEGIN
@@ -155,9 +175,6 @@ EXEC sys.sp_create_plan_guide
         RETURN;
     END;
 
-    IF @@TRANCOUNT <> 0
-        THROW 60003, 'Run this procedure outside an existing transaction.', 1;
-
     DECLARE @DatabaseExec nvarchar(300) = QUOTENAME(@DbName) + N'.sys.sp_executesql';
 
     BEGIN TRY
@@ -165,12 +182,12 @@ EXEC sys.sp_create_plan_guide
 
         EXEC @DatabaseExec @Sql,
             N'@PlanGuideName sysname, @StatementFullText nvarchar(max), @ModuleName nvarchar(517),
-              @HintText nvarchar(1000), @ExistingGuide bit',
+              @HintText nvarchar(1000), @DropExisting bit',
             @PlanGuideName = @PlanGuideName,
             @StatementFullText = @StatementFullText,
             @ModuleName = @ModuleName,
             @HintText = @HintText,
-            @ExistingGuide = @ExistingGuide;
+            @DropExisting = @DropExisting;
 
         COMMIT TRANSACTION;
     END TRY
