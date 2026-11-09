@@ -1,24 +1,45 @@
---Create DB
-IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'$(DbName)')
+-- SQLCMD substitutes text into a SQL literal. Double apostrophes in DbName when supplying it directly.
+DECLARE @DbName       sysname = N'$(DbName)',
+        @QuotedDbName nvarchar(258),
+        @FileStem     nvarchar(128),
+        @FilePath     nvarchar(4000),
+        @Sql          nvarchar(max);
+
+IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @DbName)
 BEGIN
-    CREATE DATABASE [$(DbName)];
-    ALTER DATABASE  [$(DbName)] ADD FILEGROUP [DATA];
-    --Need to use dynamic SQL to ensure we put this data file in the right spot dynamically
-    DECLARE @sql nvarchar(max);
-    SELECT @sql = N'ALTER DATABASE  [$(DbName)] ADD FILE (NAME=N''$(DbName)_data'', FILENAME=N''' 
-                    + LEFT(physical_name,LEN(physical_name)-CHARINDEX(N'\',REVERSE(physical_name))+1) 
-                    + N'$(DbName)_data.ndf' + N''') TO FILEGROUP [DATA];'
-    FROM sys.master_files 
-    WHERE database_id = db_id(N'$(DbName)')
-    AND file_id = 1;
-    EXEC sys.sp_executesql @statement = @sql;
-    --And now finish up creating it
-    ALTER DATABASE  [$(DbName)] MODIFY FILEGROUP [DATA] DEFAULT;
-    ALTER DATABASE  [$(DbName)] SET READ_COMMITTED_SNAPSHOT ON;
-    --set sa as owner
-    ALTER AUTHORIZATION ON database::$(DbName) TO sa;
-    --set to simple recovery on creation
-    --if you change this after creation, we won't change it back.
-    ALTER DATABASE $(DbName) SET RECOVERY SIMPLE;
-END
+    SET @QuotedDbName = QUOTENAME(@DbName);
+    SET @Sql = N'CREATE DATABASE ' + @QuotedDbName + N';';
+    EXEC sys.sp_executesql @Sql;
+
+    SET @FileStem = @DbName;
+
+    -- Windows disallows these punctuation and control characters in filenames.
+    DECLARE @Position int = 1,
+            @Character nchar(1);
+
+    WHILE @Position <= DATALENGTH(@FileStem) / 2
+    BEGIN
+        SET @Character = SUBSTRING(@FileStem COLLATE Latin1_General_100_BIN2, @Position, 1);
+        IF UNICODE(@Character) < 32 OR CHARINDEX(@Character COLLATE Latin1_General_100_BIN2, N'<>:"/\|?*') > 0
+            SET @FileStem = STUFF(@FileStem COLLATE Latin1_General_100_BIN2, @Position, 1, N'_');
+        SET @Position += 1;
+    END;
+
+    SELECT @FilePath = LEFT(physical_name, LEN(physical_name) - CHARINDEX(N'\', REVERSE(physical_name)) + 1)
+                     + @FileStem + N'_data.ndf'
+    FROM sys.master_files
+    WHERE database_id = DB_ID(@DbName)
+      AND file_id = 1;
+
+    SET @Sql = N'ALTER DATABASE ' + @QuotedDbName + N' ADD FILEGROUP [DATA];
+ALTER DATABASE ' + @QuotedDbName + N' ADD FILE (
+    NAME = ' + QUOTENAME(N'DBA_data') + N',
+    FILENAME = N''' + REPLACE(@FilePath, N'''', N'''''') + N'''
+) TO FILEGROUP [DATA];
+ALTER DATABASE ' + @QuotedDbName + N' MODIFY FILEGROUP [DATA] DEFAULT;
+ALTER DATABASE ' + @QuotedDbName + N' SET READ_COMMITTED_SNAPSHOT ON;
+ALTER AUTHORIZATION ON DATABASE::' + @QuotedDbName + N' TO [sa];
+ALTER DATABASE ' + @QuotedDbName + N' SET RECOVERY SIMPLE;';
+    EXEC sys.sp_executesql @Sql;
+END;
 GO
