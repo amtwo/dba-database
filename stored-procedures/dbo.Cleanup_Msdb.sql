@@ -29,6 +29,7 @@ SET NOCOUNT ON;
 
 IF @@TRANCOUNT <> 0 OR (@@OPTIONS & 2) = 2
 BEGIN
+    SET XACT_ABORT OFF;
     RAISERROR('Run Cleanup_Msdb without an existing or implicit transaction.', 16, 1);
     RETURN;
 END;
