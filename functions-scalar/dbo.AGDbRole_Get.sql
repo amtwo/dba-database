@@ -26,27 +26,31 @@ BEGIN
     DECLARE @Sql nvarchar(max);
 
     IF CAST(LEFT(CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(100)),2) as int) >= 11
-    WITH hadr_role 
-    AS (
-        SELECT d.name  COLLATE SQL_Latin1_General_CP1_CI_AS AS Name, 
-            d.state_desc  COLLATE SQL_Latin1_General_CP1_CI_AS AS StateDesc, 
-            rs.role_desc  COLLATE SQL_Latin1_General_CP1_CI_AS AS RoleDesc
-        FROM sys.databases d
-        LEFT JOIN sys.dm_hadr_availability_replica_states rs
-            ON rs.replica_id = d.replica_id AND rs.is_local = 1
-        UNION ALL
-        SELECT ag.name COLLATE SQL_Latin1_General_CP1_CI_AS, 
-            rs.operational_state_desc COLLATE SQL_Latin1_General_CP1_CI_AS, 
-            rs.role_desc  COLLATE SQL_Latin1_General_CP1_CI_AS
-        FROM sys.availability_groups ag
-        LEFT JOIN sys.dm_hadr_availability_replica_states rs
-            ON rs.group_id = ag.group_id AND rs.is_local = 1
-    )
-    SELECT @Role = COALESCE(RoleDesc, StateDesc)
-    FROM hadr_role
-    WHERE Name = @Name;
+    BEGIN
+        WITH hadr_role
+        AS (
+            SELECT d.name  COLLATE SQL_Latin1_General_CP1_CI_AS AS Name,
+                d.state_desc  COLLATE SQL_Latin1_General_CP1_CI_AS AS StateDesc,
+                rs.role_desc  COLLATE SQL_Latin1_General_CP1_CI_AS AS RoleDesc
+            FROM sys.databases d
+            LEFT JOIN sys.dm_hadr_availability_replica_states rs
+                ON rs.replica_id = d.replica_id AND rs.is_local = 1
+            UNION ALL
+            SELECT ag.name COLLATE SQL_Latin1_General_CP1_CI_AS,
+                rs.operational_state_desc COLLATE SQL_Latin1_General_CP1_CI_AS,
+                rs.role_desc  COLLATE SQL_Latin1_General_CP1_CI_AS
+            FROM sys.availability_groups ag
+            LEFT JOIN sys.dm_hadr_availability_replica_states rs
+                ON rs.group_id = ag.group_id AND rs.is_local = 1
+        )
+        SELECT @Role = COALESCE(RoleDesc, StateDesc)
+        FROM hadr_role
+        WHERE Name = @Name;
+    END
     ELSE
+    BEGIN
         SELECT @Role = d.state_desc FROM sys.databases d WHERE d.name = @Name;
+    END;
 
     RETURN @Role;
 END

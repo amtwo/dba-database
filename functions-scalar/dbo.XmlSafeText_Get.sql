@@ -27,7 +27,9 @@ RETURNS nvarchar(max)
 AS
 BEGIN
     IF @Text IS NULL
+    BEGIN
         RETURN NULL;
+    END;
 
     DECLARE @CodeUnitText nvarchar(max) = @Text,
             @TextBytes varbinary(max) = CONVERT(varbinary(max), @Text),
@@ -108,7 +110,9 @@ BEGIN
            OR PATINDEX(@TrailingHighSurrogatePattern, @SearchChunk COLLATE Latin1_General_100_BIN2) > 0
            OR PATINDEX(@InitialLowSurrogatePattern, @SearchChunk COLLATE Latin1_General_100_BIN2) > 0
            OR PATINDEX(@UnpairedLowSurrogatePattern, @SearchChunk COLLATE Latin1_General_100_BIN2) > 0
+        BEGIN
             SET @HasUnpairedSurrogate = 1;
+        END;
 
         SET @ChunkStart += 3999;
     END;
@@ -119,7 +123,9 @@ BEGIN
                     + NCHAR(14) + N'-' + NCHAR(31) + N']%', @Text) = 0
        AND @HasNoncharacter = 0
        AND @HasUnpairedSurrogate = 0
+    BEGIN
         RETURN @Text;
+    END;
     WHILE @Position <= @Length
     BEGIN
         SET @CharacterCode = UNICODE(SUBSTRING(@CodeUnitText COLLATE Latin1_General_100_BIN2, @Position, 1));
@@ -132,29 +138,51 @@ BEGIN
                 SET @NextCharacterCode = UNICODE(SUBSTRING(@CodeUnitText COLLATE Latin1_General_100_BIN2, @Position + 1, 1));
 
                 IF @NextCharacterCode BETWEEN 56320 AND 57343 -- Valid low surrogate
+                BEGIN
                     SET @Position += 2;
+                END
                 ELSE
+                BEGIN
                     SET @ReplaceCharacter = 1;
+                END;
             END;
             ELSE
+            BEGIN
                 SET @ReplaceCharacter = 1;
+            END;
         END;
-        ELSE IF @CharacterCode BETWEEN 56320 AND 57343 -- Unpaired low surrogate
-            SET @ReplaceCharacter = 1;
-        ELSE IF @CharacterCode NOT IN (9, 10, 13)
-             AND @CharacterCode NOT BETWEEN 32 AND 55295
-             AND @CharacterCode NOT BETWEEN 57344 AND 65533
-            SET @ReplaceCharacter = 1;
         ELSE
-            SET @Position += 1;
+        BEGIN
+            IF @CharacterCode BETWEEN 56320 AND 57343 -- Unpaired low surrogate
+            BEGIN
+                SET @ReplaceCharacter = 1;
+            END
+            ELSE
+            BEGIN
+                IF @CharacterCode NOT IN (9, 10, 13)
+                     AND @CharacterCode NOT BETWEEN 32 AND 55295
+                     AND @CharacterCode NOT BETWEEN 57344 AND 65533
+                BEGIN
+                    SET @ReplaceCharacter = 1;
+                END
+                ELSE
+                BEGIN
+                    SET @Position += 1;
+                END;
+            END;
+        END;
 
         IF @ReplaceCharacter = 1
         BEGIN
             IF @SafeText IS NULL
+            BEGIN
                 SET @SafeText = N'';
+            END;
 
             IF @Position > @SegmentStart
+            BEGIN
                 SET @SafeText += SUBSTRING(@CodeUnitText COLLATE Latin1_General_100_BIN2, @SegmentStart, @Position - @SegmentStart);
+            END;
 
             SET @SafeText += NCHAR(65533);
             SET @Position += 1;
@@ -163,7 +191,9 @@ BEGIN
     END;
 
     IF @SafeText IS NULL
+    BEGIN
         RETURN @Text;
+    END;
 
     RETURN @SafeText + SUBSTRING(@CodeUnitText COLLATE Latin1_General_100_BIN2, @SegmentStart, @Length - @SegmentStart + 1);
 END;
