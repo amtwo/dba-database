@@ -1,8 +1,5 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'V' AND object_id = object_id('dbo.ServerProperties'))
-    EXEC ('CREATE VIEW dbo.ServerProperties AS SELECT Result = ''This is a stub'';' )
-GO
-
-ALTER VIEW dbo.ServerProperties
+CREATE OR ALTER VIEW dbo.ServerProperties
+AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 CREATED: 2021130
@@ -21,7 +18,6 @@ CREATED: 2021130
     https://github.com/amtwo/dba-database/blob/main/LICENSE
     ©2014-2022 ● Andy Mallon ● am2.co
 *************************************************************************************************/
-AS
 SELECT 
         PropertyName,
         PropertyValue       = CONVERT(nvarchar(128), PropertyValue),
