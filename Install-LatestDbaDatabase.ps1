@@ -76,8 +76,9 @@ foreach($instance in $InstanceName) {
     Write-Verbose "**************************************************************"
     #Create the database - SQL Script contains logic to be conditional & not clobber existing database
     Write-Verbose "`n        ***Creating Database if necessary `n"
+    $escapedDatabaseName = $DatabaseName.Replace("'", "''")
     try{
-        Invoke-Sqlcmd @params -ServerInstance $instance -Database master -InputFile .\create-database.sql -Variable "DbName=$($DatabaseName)"
+        Invoke-Sqlcmd @params -ServerInstance $instance -Database master -InputFile .\create-database.sql -Variable "DbName=$escapedDatabaseName"
     }
     catch{
         Write-Error -Message "Failed creating DBA Database" -ErrorAction Stop
