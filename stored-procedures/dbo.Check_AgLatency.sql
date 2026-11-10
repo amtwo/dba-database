@@ -1,10 +1,10 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_AgLatency'))
+﻿IF NOT EXISTS (SELECT 1 FROM sys.objects AS o WHERE o.type = 'P' AND o.object_id = object_id('dbo.Check_AgLatency'))
     EXEC ('CREATE PROCEDURE dbo.Check_AgLatency AS SELECT ''This is a stub''')
 GO
 
 
 ALTER PROCEDURE dbo.Check_AgLatency 
-    @Threshold int = 0,
+    @Threshold int = 5000,
     @DbName nvarchar(128) = N'%',
     @AgName nvarchar(128) = N'%',
     @UnhealthyOnly bit = 0
@@ -16,10 +16,10 @@ CREATED: 20140409
        Latency is based on the worst reported condition from both DMVs & perfmon.
 
 PARAMETERS
-* @Threshold - Default 5000 - Size in KB of the unsent log 
+* @Threshold - Default 5000 - Minimum unsent log KB. Unknown queues always pass the threshold and sort first.
 * @DbName        - Default % (anything) - Filter by DbName, Can be wildcarded
 * @AgName        - Default % (anything) - Filter by AgName, Can be wildcarded
-* @UnhealthyOnly - Default 0 (false) - Only select databases that have sync status of NOT HEALTHY
+* @UnhealthyOnly - Default 0 (false) - Only select databases with a replica that is unhealthy or has an unknown send queue.
 EXAMPLES:
 *
 **************************************************************************************************
@@ -49,6 +49,7 @@ CREATE TABLE #AgStatus ( --drop table #AgStatus
     ServerName sysname NOT NULL ,
     AgName sysname NOT NULL,
     DbName sysname NOT NULL ,
+    IsPrimary bit NULL,
     AgRole nvarchar(60) NULL,
     SynchState nvarchar(60) NULL,
     AgHealth nvarchar(60) NULL,
@@ -80,100 +81,112 @@ CREATE TABLE #Results (
     RedoEstSecCompletion bigint,
     LastCommitTime datetime2(3),
     MinutesBehind int,
-    SortOrder int
+    SortOrder int,
+    AgRole nvarchar(60)
     );
 
 
 -- Grab the current status from DMVs for AGs
 -- In a distributed AG, "ServerName" is the AG name we're sending to.
-INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, AgRole, SynchState, AgHealth, SuspendReason, 
+INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, IsPrimary, AgRole, SynchState, AgHealth, SuspendReason,
                       SynchHardenedLSN, LastHardenedTime, LastRedoneTime, RedoEstSecCompletion,LastCommitTime)
     SELECT GETDATE() AS RunDate, 
            ar.replica_server_name AS ServerName, 
            ag.Name                        COLLATE SQL_Latin1_General_CP1_CI_AS AS AgName,
-           db_name(ds.database_id) AS DbName, 
-           rs.role_desc                   COLLATE SQL_Latin1_General_CP1_CI_AS AS AgRole,
-           ds.synchronization_state_desc  COLLATE SQL_Latin1_General_CP1_CI_AS AS SynchState, 
-           ds.synchronization_health_desc COLLATE SQL_Latin1_General_CP1_CI_AS AS AgHealth, 
-           ds. suspend_reason_desc        COLLATE SQL_Latin1_General_CP1_CI_AS AS SuspendReason, 
-           ds.last_hardened_lsn  AS SynchHardenedLSN,
-           ds.last_hardened_time AS LastHardenedTime,
-           ds.last_redone_time AS LastRedoneTime,
-           CASE WHEN redo_rate = 0 THEN 0 ELSE ds.redo_queue_size/ds.redo_rate END AS RedoEstCompletion,
-           ds.last_commit_time AS LastCommitTime
+           COALESCE(adc.database_name, DB_NAME(drs.database_id)) AS DbName,
+           drs.is_primary_replica AS IsPrimary,
+           rs.role_desc AS AgRole,
+           drs.synchronization_state_desc  COLLATE SQL_Latin1_General_CP1_CI_AS AS SynchState,
+           drs.synchronization_health_desc COLLATE SQL_Latin1_General_CP1_CI_AS AS AgHealth,
+           drs.suspend_reason_desc        COLLATE SQL_Latin1_General_CP1_CI_AS AS SuspendReason,
+           drs.last_hardened_lsn  AS SynchHardenedLSN,
+           drs.last_hardened_time AS LastHardenedTime,
+           drs.last_redone_time AS LastRedoneTime,
+           CASE WHEN drs.redo_rate = 0 THEN 0 ELSE drs.redo_queue_size/drs.redo_rate END AS RedoEstCompletion,
+           drs.last_commit_time AS LastCommitTime
     FROM sys.availability_groups AS ag
     JOIN sys.availability_replicas AS ar ON ar.group_id = ag.group_id 
-    JOIN sys.dm_hadr_database_replica_states AS ds ON ds.group_id = ar.group_id AND ds.replica_id = ar.replica_id
-    JOIN sys.dm_hadr_availability_replica_states AS rs ON rs.replica_id = ds.replica_id;
+    JOIN sys.dm_hadr_database_replica_states AS drs ON drs.group_id = ar.group_id AND drs.replica_id = ar.replica_id
+    LEFT JOIN sys.dm_hadr_availability_replica_states AS rs ON rs.group_id = drs.group_id AND rs.replica_id = drs.replica_id
+    LEFT JOIN sys.availability_databases_cluster AS adc
+        ON adc.group_id = drs.group_id AND adc.group_database_id = drs.group_database_id
+    WHERE COALESCE(adc.database_name, DB_NAME(drs.database_id)) IS NOT NULL;
     
 
 --Lets make this easy, and create a temp table with the current status
 -- UNION perfmon counters with dbm_monitor_data. They should be the same, but we don't trust them, so we check both.
 INSERT INTO #SendStatus (ServerName, DbName, UnsentLogKb)
 SELECT ar.replica_server_name AS ServerName,
-        db_name( drs.database_id) AS DbName, 
-        COALESCE(drs.log_send_queue_size,99999) AS UnsentLogKb
-FROM sys.dm_hadr_database_replica_states drs
-JOIN sys.availability_replicas ar ON ar.replica_id = drs.replica_id
-WHERE drs.last_sent_time IS NOT NULL
+        COALESCE(adc.database_name, DB_NAME(drs.database_id)) AS DbName,
+        drs.log_send_queue_size AS UnsentLogKb
+FROM sys.dm_hadr_database_replica_states AS drs
+JOIN sys.availability_replicas AS ar ON ar.replica_id = drs.replica_id
+LEFT JOIN sys.availability_databases_cluster AS adc
+    ON adc.group_id = drs.group_id AND adc.group_database_id = drs.group_database_id
+WHERE drs.log_send_queue_size IS NOT NULL
+  AND COALESCE(adc.database_name, DB_NAME(drs.database_id)) IS NOT NULL
 UNION
 SELECT @@SERVERNAME,
-        LTRIM(RTRIM(instance_name)) as DbName, 
-        cntr_value AS UnsentLogKb
-FROM sys.[dm_os_performance_counters]  
-WHERE object_name = 'SQLServer:Database Replica'
-AND counter_name  = 'Log Send Queue';
+        LTRIM(RTRIM(pc.instance_name)) as DbName,
+        pc.cntr_value AS UnsentLogKb
+FROM sys.[dm_os_performance_counters] AS pc
+WHERE pc.object_name LIKE N'%:Database Replica'
+AND pc.counter_name  = 'Log Send Queue';
 
 INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason, 
-                      LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, SortOrder)
-SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
-       COALESCE(ag.AgName,'') AS AgName,
-       COALESCE(sync.DbName, ag.DbName) AS DbName,
+                      LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, SortOrder, AgRole)
+SELECT COALESCE(ags.ServerName, @@SERVERNAME) AS ServerName,
+       COALESCE(ags.AgName,'') AS AgName,
+       COALESCE(sync.DbName, ags.DbName) AS DbName,
        MAX(sync.UnsentLogKb) AS UnsentLogKb,
-       COALESCE(ag.SynchState,'') AS SynchState,
-       COALESCE(ag.AgHealth,'') AS AgHealth,
-       COALESCE(ag.SuspendReason,'') AS SuspendReason,
-       MAX(ag.LastHardenedTime),
-       MAX(ag.LastRedoneTime),
-       MAX(ag.RedoEstSecCompletion),
-       MAX(ag.LastCommitTime),
+       COALESCE(ags.SynchState,'') AS SynchState,
+       COALESCE(ags.AgHealth,'') AS AgHealth,
+       COALESCE(ags.SuspendReason,'') AS SuspendReason,
+       MAX(ags.LastHardenedTime),
+       MAX(ags.LastRedoneTime),
+       MAX(ags.RedoEstSecCompletion),
+       MAX(ags.LastCommitTime),
        CASE
-            WHEN COALESCE(sync.DbName, ag.DbName) = '_Total' THEN 0
-            WHEN MAX(sync.UnsentLogKb) > '1000' THEN 2
-            WHEN COALESCE(ag.AgHealth,'') <> 'HEALTHY' THEN 3
-            WHEN COALESCE(ag.SynchState,'') NOT IN ('SYNCHRONIZING','SYNCHRONIZED') THEN 4
+            WHEN MAX(sync.UnsentLogKb) IS NULL THEN -1
+            WHEN COALESCE(sync.DbName, ags.DbName) = '_Total' THEN 0
+            WHEN MAX(sync.UnsentLogKb) > 1000 THEN 2
+            WHEN COALESCE(ags.AgHealth,'') <> 'HEALTHY' THEN 3
+            WHEN COALESCE(ags.SynchState,'') NOT IN ('SYNCHRONIZING','SYNCHRONIZED') THEN 4
             ELSE 5
-       END AS SortOrder
+       END AS SortOrder,
+       MAX(ags.AgRole) AS AgRole
 FROM #SendStatus AS sync
-LEFT JOIN #AgStatus AS ag ON sync.ServerName = ag.ServerName AND sync.DbName = ag.DbName 
-GROUP BY COALESCE(ag.ServerName,@@SERVERNAME),  COALESCE(ag.AgName,''), COALESCE(sync.DbName, ag.DbName),COALESCE(ag.SynchState,''), COALESCE(ag.AgHealth,''), 
-          COALESCE(ag.SuspendReason,'') ;
+FULL OUTER JOIN #AgStatus AS ags ON sync.ServerName = ags.ServerName AND sync.DbName = ags.DbName
+GROUP BY COALESCE(ags.ServerName,@@SERVERNAME),  COALESCE(ags.AgName,''), COALESCE(sync.DbName, ags.DbName),COALESCE(ags.SynchState,''), COALESCE(ags.AgHealth,''),
+          COALESCE(ags.SuspendReason,'') ;
 
 UPDATE r
-SET MinutesBehind = DATEDIFF(mi,r2.LastCommitTime,r.LastCommitTime)
-FROM #Results r
-JOIN #Results r2 ON r2.AgName = r.AgName AND r2.DbName = r.DbName AND r2.LastHardenedTime IS NULL; --Primary
+SET MinutesBehind = CASE WHEN r.LastCommitTime > primaryStatus.LastCommitTime THEN 0
+                         ELSE DATEDIFF(MINUTE, r.LastCommitTime, primaryStatus.LastCommitTime) END
+FROM #Results AS r
+JOIN #AgStatus AS primaryStatus ON primaryStatus.AgName = r.AgName AND primaryStatus.DbName = r.DbName AND primaryStatus.IsPrimary = 1;
 
 
 
 --Output results
 -- Do filtering on the results here, rather than up above. 
 -- There's not much data here, so no perf advantage to doing it sooner.
-    IF NOT EXISTS (SELECT 1 FROM #Results)
+    IF NOT EXISTS (SELECT 1 FROM #Results AS r)
         SELECT 'No AGs Exist' AS AgStatus;
     ELSE
-        SELECT * 
+        SELECT r.*
         FROM #Results AS r
-        WHERE r.UnsentLogKb >= @Threshold
+        WHERE (r.UnsentLogKb IS NULL OR r.UnsentLogKb >= @Threshold)
         AND r.DbName LIKE @DbName
         AND r.AgName LIKE @AgName
         AND r.DbName = CASE
                         WHEN @UnhealthyOnly = 0 
                             THEN r.DbName
-                        WHEN EXISTS (SELECT 1 FROM #Results r2
-                                    WHERE r2.AgHealth <> 'HEALTHY'
-                                    AND r2.DbName = r.DbName)
+                        WHEN EXISTS (SELECT 1 FROM #Results AS peer
+                                    WHERE (peer.AgHealth <> 'HEALTHY' OR peer.UnsentLogKb IS NULL)
+                                    AND peer.AgName = r.AgName
+                                    AND peer.DbName = r.DbName)
                             THEN r.DbName
                       END
-        ORDER BY SortOrder, UnsentLogKb DESC, ServerName, DbName;
+        ORDER BY r.SortOrder, r.UnsentLogKb DESC, r.ServerName, r.DbName;
 GO
