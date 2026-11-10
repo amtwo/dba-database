@@ -16,7 +16,7 @@ CREATED: 20140409
        Latency is based on the worst reported condition from both DMVs & perfmon.
 
 PARAMETERS
-* @Threshold - Default 5000 - Minimum unsent log KB. Unknown values use 99999 for filtering and sorting.
+* @Threshold - Default 5000 - Minimum unsent log KB. Unknown queues always pass the threshold and sort first.
 * @DbName        - Default % (anything) - Filter by DbName, Can be wildcarded
 * @AgName        - Default % (anything) - Filter by AgName, Can be wildcarded
 * @UnhealthyOnly - Default 0 (false) - Only select databases with a replica that is unhealthy or has an unknown send queue.
@@ -133,7 +133,6 @@ FROM sys.[dm_os_performance_counters]
 WHERE object_name LIKE N'%:Database Replica'
 AND counter_name  = 'Log Send Queue';
 
--- Keep the legacy 99999 ranking for unknown queues while reporting the measurement as NULL.
 INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason, 
                       LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, SortOrder, AgRole)
 SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
@@ -148,8 +147,9 @@ SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
        MAX(ag.RedoEstSecCompletion),
        MAX(ag.LastCommitTime),
        CASE
+            WHEN MAX(sync.UnsentLogKb) IS NULL THEN -1
             WHEN COALESCE(sync.DbName, ag.DbName) = '_Total' THEN 0
-            WHEN COALESCE(MAX(sync.UnsentLogKb), 99999) > 1000 THEN 2
+            WHEN MAX(sync.UnsentLogKb) > 1000 THEN 2
             WHEN COALESCE(ag.AgHealth,'') <> 'HEALTHY' THEN 3
             WHEN COALESCE(ag.SynchState,'') NOT IN ('SYNCHRONIZING','SYNCHRONIZED') THEN 4
             ELSE 5
@@ -176,7 +176,7 @@ JOIN #AgStatus AS p ON p.AgName = r.AgName AND p.DbName = r.DbName AND p.IsPrima
     ELSE
         SELECT * 
         FROM #Results AS r
-        WHERE COALESCE(r.UnsentLogKb, 99999) >= @Threshold
+        WHERE (r.UnsentLogKb IS NULL OR r.UnsentLogKb >= @Threshold)
         AND r.DbName LIKE @DbName
         AND r.AgName LIKE @AgName
         AND r.DbName = CASE
@@ -188,5 +188,5 @@ JOIN #AgStatus AS p ON p.AgName = r.AgName AND p.DbName = r.DbName AND p.IsPrima
                                     AND r2.DbName = r.DbName)
                             THEN r.DbName
                       END
-        ORDER BY SortOrder, COALESCE(r.UnsentLogKb, 99999) DESC, ServerName, DbName;
+        ORDER BY SortOrder, r.UnsentLogKb DESC, ServerName, DbName;
 GO
