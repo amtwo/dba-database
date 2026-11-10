@@ -13,11 +13,10 @@ AS
 AUTHOR: Andy Mallon
 CREATED: 20140409
        This Alert checks AG latency (unsent logs). 
-       Queue size is the larger available measurement from replica DMVs and local counters.
-       Returns one row per database replica. Queue size and commit lag can be NULL when unavailable.
+       Latency is based on the worst reported condition from both DMVs & perfmon.
 
 PARAMETERS
-* @Threshold - Default 0 - Minimum unsent log KB. Zero includes unavailable queue measurements.
+* @Threshold - Default 0 - Minimum unsent log KB. Zero includes unavailable measurements.
 * @DbName        - Default % (anything) - Filter by DbName, Can be wildcarded
 * @AgName        - Default % (anything) - Filter by AgName, Can be wildcarded
 * @UnhealthyOnly - Default 0 (false) - Only select databases that have sync status of NOT HEALTHY
@@ -33,6 +32,40 @@ MODIFICATIONS:
     ©2014-2020 ● Andy Mallon ● am2.co
 *************************************************************************************************/
 SET NOCOUNT ON;
+
+DECLARE 
+    @ProductVersion tinyint;
+
+SET @ProductVersion = LEFT(CAST(SERVERPROPERTY('PRODUCTVERSION') AS varchar(20)),CHARINDEX('.',CAST(SERVERPROPERTY('PRODUCTVERSION') AS varchar(20)))-1)
+
+IF @ProductVersion < 11
+BEGIN
+    SELECT 'SQL Server version does not support AGs';
+    RETURN;
+END;
+    
+CREATE TABLE #AgStatus ( --drop table #AgStatus
+    RunDate smalldatetime NOT NULL ,
+    ServerName sysname NOT NULL ,
+    AgName sysname NOT NULL,
+    DbName sysname NOT NULL ,
+    IsPrimary bit NULL,
+    SynchState nvarchar(60) NULL,
+    AgHealth nvarchar(60) NULL,
+    SuspendReason nvarchar(60) NULL,
+    SynchHardenedLSN numeric(25,0) NULL,
+    LastHardenedTime datetime2(3) NULL,
+    LastRedoneTime datetime2(3) NULL,
+    RedoEstSecCompletion bigint NULL,
+    LastCommitTime datetime2(3) NULL,
+    PRIMARY KEY  CLUSTERED (RunDate, ServerName, DBName)
+    );
+
+CREATE TABLE #SendStatus (
+    ServerName sysname,
+    DbName sysname,
+    UnsentLogKb bigint
+    );
 
 CREATE TABLE #Results (
     ServerName sysname,
@@ -51,69 +84,83 @@ CREATE TABLE #Results (
     );
 
 
--- Replica state is the source of rows. Queue counters only supplement it.
-WITH ReplicaStatus AS (
-    SELECT ar.replica_server_name AS ServerName,
-           ag.name AS AgName,
+-- Grab the current status from DMVs for AGs
+-- In a distributed AG, "ServerName" is the AG name we're sending to.
+INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, IsPrimary, SynchState, AgHealth, SuspendReason,
+                      SynchHardenedLSN, LastHardenedTime, LastRedoneTime, RedoEstSecCompletion,LastCommitTime)
+    SELECT GETDATE() AS RunDate, 
+           ar.replica_server_name AS ServerName, 
+           ag.Name                        COLLATE SQL_Latin1_General_CP1_CI_AS AS AgName,
            COALESCE(adc.database_name, DB_NAME(ds.database_id)) AS DbName,
-           ds.group_id AS GroupId,
-           ds.group_database_id AS GroupDatabaseId,
-           ds.is_local AS IsLocal,
            ds.is_primary_replica AS IsPrimary,
-           ds.log_send_queue_size AS LogSendQueueKb,
-           ds.synchronization_state_desc AS SynchState,
-           ds.synchronization_health_desc AS AgHealth,
-           ds.suspend_reason_desc AS SuspendReason,
+           ds.synchronization_state_desc  COLLATE SQL_Latin1_General_CP1_CI_AS AS SynchState, 
+           ds.synchronization_health_desc COLLATE SQL_Latin1_General_CP1_CI_AS AS AgHealth, 
+           ds. suspend_reason_desc        COLLATE SQL_Latin1_General_CP1_CI_AS AS SuspendReason, 
+           ds.last_hardened_lsn  AS SynchHardenedLSN,
            ds.last_hardened_time AS LastHardenedTime,
            ds.last_redone_time AS LastRedoneTime,
-           CASE WHEN ds.redo_rate = 0 THEN 0 ELSE ds.redo_queue_size / ds.redo_rate END AS RedoEstSecCompletion,
+           CASE WHEN redo_rate = 0 THEN 0 ELSE ds.redo_queue_size/ds.redo_rate END AS RedoEstCompletion,
            ds.last_commit_time AS LastCommitTime
-    FROM sys.dm_hadr_database_replica_states AS ds
-    JOIN sys.availability_groups AS ag ON ag.group_id = ds.group_id
-    JOIN sys.availability_replicas AS ar ON ar.group_id = ds.group_id AND ar.replica_id = ds.replica_id
+    FROM sys.availability_groups AS ag
+    JOIN sys.availability_replicas AS ar ON ar.group_id = ag.group_id 
+    JOIN sys.dm_hadr_database_replica_states AS ds ON ds.group_id = ar.group_id AND ds.replica_id = ar.replica_id
     LEFT JOIN sys.availability_databases_cluster AS adc
         ON adc.group_id = ds.group_id AND adc.group_database_id = ds.group_database_id
-)
-INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason,
-                      LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, MinutesBehind, SortOrder)
-SELECT r.ServerName,
-       r.AgName,
-       r.DbName,
-       q.UnsentLogKb,
-       r.SynchState,
-       r.AgHealth,
-       r.SuspendReason,
-       r.LastHardenedTime,
-       r.LastRedoneTime,
-       r.RedoEstSecCompletion,
-       r.LastCommitTime,
+    WHERE COALESCE(adc.database_name, DB_NAME(ds.database_id)) IS NOT NULL;
+    
+
+--Lets make this easy, and create a temp table with the current status
+-- UNION perfmon counters with dbm_monitor_data. They should be the same, but we don't trust them, so we check both.
+INSERT INTO #SendStatus (ServerName, DbName, UnsentLogKb)
+SELECT ar.replica_server_name AS ServerName,
+        COALESCE(adc.database_name, DB_NAME(drs.database_id)) AS DbName,
+        drs.log_send_queue_size AS UnsentLogKb
+FROM sys.dm_hadr_database_replica_states drs
+JOIN sys.availability_replicas ar ON ar.replica_id = drs.replica_id
+LEFT JOIN sys.availability_databases_cluster AS adc
+    ON adc.group_id = drs.group_id AND adc.group_database_id = drs.group_database_id
+WHERE drs.log_send_queue_size IS NOT NULL
+  AND COALESCE(adc.database_name, DB_NAME(drs.database_id)) IS NOT NULL
+UNION
+SELECT @@SERVERNAME,
+        LTRIM(RTRIM(instance_name)) as DbName, 
+        cntr_value AS UnsentLogKb
+FROM sys.[dm_os_performance_counters]  
+WHERE object_name LIKE N'%:Database Replica'
+AND counter_name  = 'Log Send Queue';
+
+INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason, 
+                      LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, SortOrder)
+SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
+       COALESCE(ag.AgName,'') AS AgName,
+       COALESCE(sync.DbName, ag.DbName) AS DbName,
+       MAX(sync.UnsentLogKb) AS UnsentLogKb,
+       COALESCE(ag.SynchState,'') AS SynchState,
+       COALESCE(ag.AgHealth,'') AS AgHealth,
+       COALESCE(ag.SuspendReason,'') AS SuspendReason,
+       MAX(ag.LastHardenedTime),
+       MAX(ag.LastRedoneTime),
+       MAX(ag.RedoEstSecCompletion),
+       MAX(ag.LastCommitTime),
        CASE
-           WHEN r.IsPrimary = 1 THEN 0
-           WHEN r.LastCommitTime > p.LastCommitTime THEN 0
-           ELSE DATEDIFF(MINUTE, r.LastCommitTime, p.LastCommitTime)
-       END,
-       CASE
-           WHEN q.UnsentLogKb > 1000 THEN 2
-           WHEN r.AgHealth <> N'HEALTHY' THEN 3
-           WHEN r.SynchState NOT IN (N'SYNCHRONIZING', N'SYNCHRONIZED') THEN 4
-           ELSE 5
-       END
-FROM ReplicaStatus AS r
-LEFT JOIN ReplicaStatus AS p
-    ON p.GroupId = r.GroupId AND p.GroupDatabaseId = r.GroupDatabaseId AND p.IsPrimary = 1
-OUTER APPLY (
-    SELECT MAX(pc.cntr_value) AS QueueKb
-    FROM sys.dm_os_performance_counters AS pc
-    WHERE r.IsLocal = 1
-      AND r.IsPrimary = 0
-      AND pc.object_name LIKE N'%:Database Replica'
-      AND pc.counter_name = N'Log Send Queue'
-      AND LTRIM(RTRIM(pc.instance_name)) = r.DbName COLLATE DATABASE_DEFAULT
-) AS perf
-CROSS APPLY (
-    SELECT MAX(v.QueueKb) AS UnsentLogKb
-    FROM (VALUES (r.LogSendQueueKb), (perf.QueueKb)) AS v(QueueKb)
-) AS q;
+            WHEN COALESCE(sync.DbName, ag.DbName) = '_Total' THEN 0
+            WHEN MAX(sync.UnsentLogKb) > '1000' THEN 2
+            WHEN COALESCE(ag.AgHealth,'') <> 'HEALTHY' THEN 3
+            WHEN COALESCE(ag.SynchState,'') NOT IN ('SYNCHRONIZING','SYNCHRONIZED') THEN 4
+            ELSE 5
+       END AS SortOrder
+FROM #SendStatus AS sync
+FULL OUTER JOIN #AgStatus AS ag ON sync.ServerName = ag.ServerName AND sync.DbName = ag.DbName
+GROUP BY COALESCE(ag.ServerName,@@SERVERNAME),  COALESCE(ag.AgName,''), COALESCE(sync.DbName, ag.DbName),COALESCE(ag.SynchState,''), COALESCE(ag.AgHealth,''), 
+          COALESCE(ag.SuspendReason,'') ;
+
+UPDATE r
+SET MinutesBehind = CASE WHEN r.LastCommitTime > p.LastCommitTime THEN 0
+                         ELSE DATEDIFF(MINUTE, r.LastCommitTime, p.LastCommitTime) END
+FROM #Results r
+JOIN #AgStatus AS p ON p.AgName = r.AgName AND p.DbName = r.DbName AND p.IsPrimary = 1;
+
+
 
 --Output results
 -- Do filtering on the results here, rather than up above. 
