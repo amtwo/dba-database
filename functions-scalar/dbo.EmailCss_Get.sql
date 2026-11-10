@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'FN' AND object_id = object_id('dbo.EmailCss_Get'))
-    EXEC ('CREATE FUNCTION dbo.EmailCss_Get() RETURNS nvarchar(60) AS BEGIN RETURN ''This is a stub''; END')
-GO
-
-
-ALTER FUNCTION dbo.EmailCss_Get()
+CREATE OR ALTER FUNCTION dbo.EmailCss_Get()
 RETURNS nvarchar(max)
 AS
 /*************************************************************************************************

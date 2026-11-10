@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'FN' AND object_id = object_id('dbo.AGDbRole_Get'))
-    EXEC ('CREATE FUNCTION dbo.AGDbRole_Get() RETURNS nvarchar(60) AS BEGIN RETURN ''This is a stub''; END')
-GO
-
-
-ALTER FUNCTION dbo.AGDbRole_Get( @Name sysname)
+CREATE OR ALTER FUNCTION dbo.AGDbRole_Get( @Name sysname)
 RETURNS nvarchar(60)
 /*************************************************************************************************
 AUTHOR: Andy Mallon
