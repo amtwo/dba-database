@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Get_DetachAttachSql'))
-    EXEC ('CREATE PROCEDURE dbo.Get_DetachAttachSql AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Get_DetachAttachSql
+CREATE OR ALTER PROCEDURE dbo.Get_DetachAttachSql
     @name_pattern         nvarchar(300)  = N'%', 
     @database_list        nvarchar(max)  = NULL,
     @exclude_pattern      nvarchar(300)  = NULL,

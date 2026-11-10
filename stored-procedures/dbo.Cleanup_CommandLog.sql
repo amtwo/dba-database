@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Cleanup_CommandLog'))
-    EXEC ('CREATE PROCEDURE dbo.Cleanup_CommandLog AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Cleanup_CommandLog
+CREATE OR ALTER PROCEDURE dbo.Cleanup_CommandLog
     @RetainDays_Backup  int = 30,
     @RetainDays_DBCC    int = 180,
     @RetainDays_Index   int = 180,

@@ -1,9 +1,4 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Cleanup_TableByID'))
-    EXEC ('CREATE PROCEDURE dbo.Cleanup_TableByID AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Cleanup_TableByID
+﻿CREATE OR ALTER PROCEDURE dbo.Cleanup_TableByID
     @DbName nvarchar(128),
     @SchemaName nvarchar(128) = 'dbo',
     @TableName nvarchar(128),

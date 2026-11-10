@@ -9,7 +9,7 @@ This depends on having the full, latest version of the full repo https://github.
 
 All dependent .sql files are itempotent:
 * Table.sql scripts are written to create if not exists. Changes are maintained similarly as conditional ALTERs.
-* code.sql scripst are written to create a stub, then alter with actual code.
+* Procedure, function, and view scripts use CREATE OR ALTER, with the documented master exception.
 
 .PARAMETER InstanceName
 An array of instance names

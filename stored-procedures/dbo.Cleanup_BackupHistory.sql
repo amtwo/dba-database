@@ -1,8 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Cleanup_BackupHistory'))
-    EXEC ('CREATE PROCEDURE dbo.Cleanup_BackupHistory AS SELECT ''This is a stub''')
-GO
-
-ALTER PROCEDURE dbo.Cleanup_BackupHistory
+CREATE OR ALTER PROCEDURE dbo.Cleanup_BackupHistory
     @oldest_date datetime
 AS
 /*************************************************************************************************

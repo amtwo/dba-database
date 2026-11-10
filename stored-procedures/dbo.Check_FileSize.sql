@@ -1,9 +1,4 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_FileSize'))
-    EXEC ('CREATE PROCEDURE dbo.Check_FileSize AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Check_FileSize
+﻿CREATE OR ALTER PROCEDURE dbo.Check_FileSize
     @DbName sysname = NULL,
     @Drive char(1) = NULL,
     @IncludeDataFiles bit = 1,

@@ -49,7 +49,7 @@ Automated coding agents follow this document for code conventions and [AGENTS.md
 ## The 30-second version
 
 1. One object per file. Filename matches: `dbo.ObjectName.sql`.
-2. New modules use `CREATE OR ALTER`. Always re-runnable.
+2. Use `CREATE OR ALTER` for stored procedures, views, and functions. Always re-runnable.
 3. Every module gets the header comment block. Fill it in.
 4. **PascalCase** objects, columns, and parameters. Schema-qualify everything with `dbo.`.
 5. Keywords UPPERCASE, **data types lowercase** (`int`, `sysname`, `nvarchar(max)`).
@@ -98,23 +98,9 @@ AS
 
 That's it. Re-running the script updates the object in place without dropping it.
 
-### The legacy stub pattern (and the one case it survives)
+### The `master` exception
 
-A lot of the older files use a "stub then `ALTER`" dance:
-
-```sql
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_Blocking'))
-    EXEC ('CREATE PROCEDURE dbo.Check_Blocking AS SELECT ''This is a stub''')
-GO
-
-ALTER PROCEDURE dbo.Check_Blocking
-...
-```
-
-You'll see this everywhere in the back catalog. **Don't copy it into new files** — use `CREATE OR ALTER`. It's only still around for two reasons:
-
-1. **History.** Those files predate `CREATE OR ALTER` being something I trusted to be everywhere.
-2. **One legitimate exception:** the `sp_` procs that get installed into `master` and marked as system objects (see `dbo.sp_Get_BaseTableList.sql`). Dropping and recreating those would yank permissions and the system-object marking out from under anything using them, so the stub-then-`ALTER` approach stays. If you're not working in `master`, this doesn't apply to you.
+Use `CREATE OR ALTER` for stored procedures, views, and functions on SQL Server 2016 SP1 and later. Keep the existing deployment pattern for [`dbo.sp_Get_BaseTableList`](stored-procedures/dbo.sp_Get_BaseTableList.sql), which is deployed to `master` and may already be marked as a system object on existing installations.
 
 **Everything must be idempotent.** Run the installer twice, get the same result. Tables use `IF NOT EXISTS` create plus conditional `ALTER`s; data seeds use `IF NOT EXISTS` guards (see `dbo.Config.sql`); modules use `CREATE OR ALTER`. No file should ever error because it was already run once.
 

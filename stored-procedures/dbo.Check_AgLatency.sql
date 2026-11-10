@@ -1,9 +1,4 @@
-﻿IF NOT EXISTS (SELECT 1 FROM sys.objects AS o WHERE o.type = 'P' AND o.object_id = object_id('dbo.Check_AgLatency'))
-    EXEC ('CREATE PROCEDURE dbo.Check_AgLatency AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Check_AgLatency 
+﻿CREATE OR ALTER PROCEDURE dbo.Check_AgLatency
     @Threshold int = 5000,
     @DbName nvarchar(128) = N'%',
     @AgName nvarchar(128) = N'%',

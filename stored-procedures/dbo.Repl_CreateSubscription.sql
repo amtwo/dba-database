@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Repl_CreateSubscription'))
-    EXEC ('CREATE PROCEDURE dbo.Repl_CreateSubscription AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Repl_CreateSubscription
+CREATE OR ALTER PROCEDURE dbo.Repl_CreateSubscription
     @PubDbName nvarchar(256),
     @PublicationName nvarchar(256),
     @Subscriber nvarchar(256),
