@@ -742,8 +742,8 @@ BEGIN
         END
         ELSE
         BEGIN
-            EXEC @autoStatsProc @tableArg, 'OFF';
-        END;   -- positional (@tblname, @flagc), per the documented form
+            EXEC @autoStatsProc @tableArg, 'OFF';   -- positional (@tblname, @flagc), per the documented form
+        END;
 
         FETCH NEXT FROM lock_cursor INTO @tableArg;
     END;
@@ -789,8 +789,8 @@ BEGIN
         END
         ELSE
         BEGIN
-            EXEC @autoStatsProc @tableArg, 'ON';
-        END;    -- positional (@tblname, @flagc); hand it back to auto-stats
+            EXEC @autoStatsProc @tableArg, 'ON';    -- positional (@tblname, @flagc); hand it back to auto-stats
+        END;
 
         FETCH NEXT FROM unlock_cursor INTO @tableArg;
     END;

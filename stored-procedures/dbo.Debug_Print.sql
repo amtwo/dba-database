@@ -82,13 +82,13 @@ BEGIN
 
         IF @breakOffset = 0
         BEGIN
-            SET @breakOffset = CHARINDEX(NCHAR(9), @revWindow);
-        END;     -- Tab
+            SET @breakOffset = CHARINDEX(NCHAR(9), @revWindow);     -- Tab
+        END;
 
         IF @breakOffset = 0
         BEGIN
-            SET @breakOffset = CHARINDEX(NCHAR(32), @revWindow);
-        END;    -- Space
+            SET @breakOffset = CHARINDEX(NCHAR(32), @revWindow);    -- Space
+        END;
 
         IF @breakOffset = 0
             -- No whitespace in the window: nothing to break on, so take the full 4000.
