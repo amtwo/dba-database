@@ -133,7 +133,7 @@ BEGIN
     FROM #Results AS r;
 END;
 
-SELECT @Sql = STRING_AGG(r.UpdateStatsSql, NCHAR(13) + NCHAR(10))
+SELECT @sql = STRING_AGG(r.UpdateStatsSql, NCHAR(13) + NCHAR(10))
 FROM #Results AS r;
 
 IF @Debug = 1
@@ -141,7 +141,7 @@ BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
 END;
 
-IF @Debug = 0 AND @Sql IS NOT NULL
+IF @Debug = 0 AND @sql IS NOT NULL
 BEGIN
     EXEC sys.sp_executesql @stmt = @sql;
 END;
