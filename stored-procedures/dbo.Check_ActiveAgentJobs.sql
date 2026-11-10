@@ -37,15 +37,14 @@ BEGIN
     INSERT INTO #Jobs (session_id, JobName, ExecutionStatus)
     SELECT s.session_id,
             jn.JobName,
-            CASE
-                WHEN s.program_name LIKE 'SQLAgent - TSQL JobStep (Job 0x%'
-                    THEN REPLACE(s.program_name,SUBSTRING(s.program_name,30,34),jn.JobName)
-                ELSE s.program_name
-            END
-    FROM sys.dm_exec_sessions s
-    OUTER APPLY (SELECT TOP 1 JobName = j.name 
-                    FROM msdb.dbo.sysjobs j 
-                    WHERE j.job_id = CONVERT(varbinary(100),SUBSTRING(s.program_name,30,34),1)) jn
+            COALESCE(REPLACE(s.program_name, parsed.JobIdHex, jn.JobName), s.program_name)
+    FROM sys.dm_exec_sessions AS s
+    OUTER APPLY dbo.SqlAgentJobId_Get(s.program_name) AS parsed
+    OUTER APPLY (
+        SELECT j.name AS JobName
+        FROM msdb.dbo.sysjobs AS j
+        WHERE j.job_id = CONVERT(uniqueidentifier, parsed.JobIdBinary)
+    ) AS jn
     WHERE s.program_name LIKE 'SQLAgent - TSQL JobStep (Job 0x%';
 
 

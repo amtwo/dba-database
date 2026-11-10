@@ -29,31 +29,36 @@ MODIFICATIONS:
 *************************************************************************************************/
 AS
 RETURN
-    SELECT TOP 1
-        IsRunning = CASE WHEN ja.job_id IS NOT NULL AND ja.stop_execution_date IS NULL THEN 1 ELSE 0 END,
-        LastRunTime = ja.start_execution_date,
+    SELECT
+        IsRunning = running.IsRunning,
+        LastRunTime = COALESCE(ja.start_execution_date, historyTime.RunStartDateTime),
         NextRunTime = ja.next_scheduled_run_date,
         LastJobStep = js.step_name,
-        JobOutcome = CASE 
-                        WHEN ja.job_id IS NOT NULL AND ja.stop_execution_date IS NULL THEN 'Running'
-                        WHEN run_status = 0 THEN 'Failed'
-                        WHEN run_status = 1 THEN 'Succeeded'
-                        WHEN run_status = 2 THEN 'Retry'
-                        WHEN run_status = 3 THEN 'Cancelled'
-                    END
-    FROM msdb.dbo.sysjobs j
-    LEFT JOIN msdb.dbo.sysjobactivity ja 
+        JobOutcome = CASE
+                         WHEN running.IsRunning = 1 THEN 'Running'
+                         WHEN jh.run_status = 0 THEN 'Failed'
+                         WHEN jh.run_status = 1 THEN 'Succeeded'
+                         WHEN jh.run_status = 2 THEN 'Retry'
+                         WHEN jh.run_status = 3 THEN 'Cancelled'
+                     END
+    FROM msdb.dbo.sysjobs AS j
+    LEFT JOIN msdb.dbo.sysjobactivity AS ja
         ON ja.job_id = j.job_id
-        AND ja.run_requested_date IS NOT NULL
-        AND ja.start_execution_date IS NOT NULL
-    LEFT JOIN msdb.dbo.sysjobsteps js
+        AND ja.session_id = (SELECT MAX(activity.session_id) FROM msdb.dbo.sysjobactivity AS activity)
+    CROSS APPLY (VALUES (
+        CASE WHEN ja.start_execution_date IS NOT NULL AND ja.stop_execution_date IS NULL THEN 1 ELSE 0 END
+    )) AS running(IsRunning)
+    LEFT JOIN msdb.dbo.sysjobsteps AS js
         ON js.job_id = ja.job_id
         AND js.step_id = ja.last_executed_step_id
-    LEFT JOIN msdb.dbo.sysjobhistory jh
-        ON jh.job_id = j.job_id
-        AND jh.instance_id = ja.job_history_id
-    WHERE j.name = @JobName
-    ORDER BY ja.start_execution_date DESC;
+    OUTER APPLY (
+        SELECT TOP (1) h.run_status, h.run_date, h.run_time, h.run_duration
+        FROM msdb.dbo.sysjobhistory AS h
+        WHERE h.job_id = j.job_id
+          AND h.step_id = 0
+          AND h.run_status IN (0, 1, 2, 3)
+        ORDER BY h.instance_id DESC
+    ) AS jh
+    OUTER APPLY dbo.AgentJobHistory_TimeConvert(jh.run_date, jh.run_time, jh.run_duration) AS historyTime
+    WHERE j.name = @JobName;
 GO
-
-
