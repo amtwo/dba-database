@@ -1,8 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'V' AND object_id = object_id('dbo.ServerProperties'))
-    EXEC ('CREATE VIEW dbo.ServerProperties AS SELECT Result = ''This is a stub'';' )
-GO
-
-ALTER VIEW dbo.ServerProperties
+CREATE OR ALTER VIEW dbo.ServerProperties
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 CREATED: 2021130

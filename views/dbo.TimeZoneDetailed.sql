@@ -1,6 +1,3 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'V' AND object_id = object_id('dbo.TimeZoneDetailed'))
-    EXEC ('CREATE VIEW dbo.TimeZoneDetailed AS SELECT stub = ''This is a stub''')
-GO
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 **************************************************************************************************
@@ -8,7 +5,7 @@ AUTHOR: Andy Mallon
     https://github.com/amtwo/dba-database/blob/master/LICENSE
     ©2014-2020 ● Andy Mallon ● am2.co
 *************************************************************************************************/
-ALTER VIEW dbo.TimeZoneDetailed
+CREATE OR ALTER VIEW dbo.TimeZoneDetailed
 AS
 SELECT tz.TimeZoneId,
        tz.DisplayName,
