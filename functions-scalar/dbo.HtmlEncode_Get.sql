@@ -24,7 +24,9 @@ MODIFICATIONS:
 AS
 BEGIN
     IF @Text IS NULL
+    BEGIN
         RETURN NULL;
+    END;
 
     RETURN REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(@Text, N'&', N'&amp;'), N'<', N'&lt;'), N'>', N'&gt;'), N'"', N'&quot;'), N'''', N'&#39;');
 END;
