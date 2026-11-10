@@ -7,7 +7,8 @@ ALTER VIEW dbo.ServerLogins
 AUTHOR: Andy Mallon
 CREATED: 20210627
     View to get basic info for logins, simplifying/flattening DMVs, to make applying additional 
-    criteria/filters from automation & troubleshooting easier
+    criteria/filters from automation & troubleshooting easier.
+    CanLogIn indicates an enabled login with a visible, explicit CONNECT SQL grant.
 EXAMPLES:
 * All logins that can log in (enabled + have CONNECT SQL), modified in the last 7 days:
     SELECT LoginName, DateModified, CreateSql
@@ -65,7 +66,7 @@ AS
             FROM sys.server_principals AS p
             LEFT JOIN sys.sql_logins AS sl 
                 ON p.name = sl.name
-            --Left join here to check to determine if the login is enabled & has connect SQL
+            -- Look up an explicit CONNECT SQL grant for enabled logins.
             LEFT JOIN sys.server_permissions AS perm 
                 ON perm.grantee_principal_id = p.principal_id
                 AND perm.type = 'COSQ' 
