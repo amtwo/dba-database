@@ -36,7 +36,7 @@ BEGIN
 
     INSERT INTO #Jobs (session_id, JobName, ExecutionStatus)
     SELECT s.session_id,
-            jn.JobName,
+            j.name,
             COALESCE(REPLACE(s.program_name, jobHex.JobIdHex, j.name), s.program_name)
     FROM sys.dm_exec_sessions AS s
     CROSS APPLY (VALUES (SUBSTRING(s.program_name, 30, 34))) AS jobHex(JobIdHex)
