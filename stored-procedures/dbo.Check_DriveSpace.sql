@@ -1,11 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_DriveSpace'))
-BEGIN
-    EXEC ('CREATE PROCEDURE dbo.Check_DriveSpace AS SELECT ''This is a stub''');
-END;
-GO
-
-
-ALTER PROCEDURE dbo.Check_DriveSpace
+CREATE OR ALTER PROCEDURE dbo.Check_DriveSpace
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
