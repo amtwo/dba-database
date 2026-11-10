@@ -19,7 +19,7 @@ PARAMETERS
 * @Threshold - Default 5000 - Minimum unsent log KB. Unknown values use 99999 for filtering and sorting.
 * @DbName        - Default % (anything) - Filter by DbName, Can be wildcarded
 * @AgName        - Default % (anything) - Filter by AgName, Can be wildcarded
-* @UnhealthyOnly - Default 0 (false) - Only select databases that have sync status of NOT HEALTHY
+* @UnhealthyOnly - Default 0 (false) - Only select databases with a replica that is unhealthy or has an unknown send queue.
 EXAMPLES:
 *
 **************************************************************************************************
@@ -183,7 +183,7 @@ JOIN #AgStatus AS p ON p.AgName = r.AgName AND p.DbName = r.DbName AND p.IsPrima
                         WHEN @UnhealthyOnly = 0 
                             THEN r.DbName
                         WHEN EXISTS (SELECT 1 FROM #Results r2
-                                    WHERE r2.AgHealth <> 'HEALTHY'
+                                    WHERE (r2.AgHealth <> 'HEALTHY' OR r2.UnsentLogKb IS NULL)
                                     AND r2.AgName = r.AgName
                                     AND r2.DbName = r.DbName)
                             THEN r.DbName
