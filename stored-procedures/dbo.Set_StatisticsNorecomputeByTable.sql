@@ -42,9 +42,7 @@ CREATE TABLE #Results (
     SchemaName sysname,
     ObjectName sysname,
     StatisticsList nvarchar(max),
-    UpdateStatsSql AS N'UPDATE STATISTICS ' + QUOTENAME(DbName) + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'
-                        (' + StatisticsList + N'
-                        ) WITH SAMPLE @@@SampleSize PERCENT, NORECOMPUTE;'
+    UpdateStatsSql nvarchar(max)
     );
 
 DECLARE @DbName sysname;
@@ -63,7 +61,7 @@ BEGIN
       IF @IncludeIndexStats = 1
       BEGIN
           SET @sql = N'
-                SELECT @DbName, s.name, o.name, STRING_AGG(CONVERT(nvarchar(max),st.name),N'','')
+                SELECT @DbName, s.name, o.name, STRING_AGG(CONVERT(nvarchar(max), QUOTENAME(st.name)),N'','')
                 FROM ' + QUOTENAME(@DbName) + N'.sys.objects o
                 JOIN ' + QUOTENAME(@DbName) + N'.sys.schemas s ON s.schema_id = o.schema_id
                 JOIN ' + QUOTENAME(@DbName) + N'.sys.indexes i ON i.object_id = o.object_id
@@ -92,7 +90,7 @@ BEGIN
       IF @IncludeColumnStats = 1
       BEGIN
           SET @sql = N'
-                SELECT @DbName, s.name, o.name, STRING_AGG(CONVERT(nvarchar(max),st.name),N'','')
+                SELECT @DbName, s.name, o.name, STRING_AGG(CONVERT(nvarchar(max), QUOTENAME(st.name)),N'','')
                 FROM ' + QUOTENAME(@DbName) + N'.sys.objects o
                 JOIN ' + QUOTENAME(@DbName) + N'.sys.schemas s ON s.schema_id = o.schema_id
                 JOIN ' + QUOTENAME(@DbName) + N'.sys.stats st  ON st.object_id = o.object_id 
@@ -123,21 +121,28 @@ END
 CLOSE db_cursor;
 DEALLOCATE db_cursor;
 
+UPDATE r
+SET UpdateStatsSql = N'UPDATE STATISTICS ' + QUOTENAME(r.DbName) + N'.' + QUOTENAME(r.SchemaName) + N'.'
+    + QUOTENAME(r.ObjectName) + N' (' + r.StatisticsList + N') WITH SAMPLE '
+    + CONVERT(nvarchar(3), @SampleSize) + N' PERCENT, NORECOMPUTE;'
+FROM #Results AS r;
+
 IF @Debug = 1
 BEGIN
-    SELECT * FROM #Results;
+    SELECT r.DbName, r.SchemaName, r.ObjectName, r.StatisticsList, r.UpdateStatsSql
+    FROM #Results AS r;
 END;
 
-SET @sql = N''
-SELECT @sql += REPLACE(UpdateStatsSql,N'@@@SampleSize', CONVERT(nvarchar(max),@SampleSize)) + CHAR(13) + CHAR(10)
-FROM #Results;
+DECLARE @LineBreak nchar(2) = NCHAR(13) + NCHAR(10);
+SELECT @sql = STRING_AGG(r.UpdateStatsSql, @LineBreak)
+FROM #Results AS r;
 
 IF @Debug = 1
 BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
 END;
 
-IF @Debug = 0
+IF @Debug = 0 AND @sql IS NOT NULL
 BEGIN
     EXEC sys.sp_executesql @stmt = @sql;
 END;
