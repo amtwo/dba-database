@@ -27,7 +27,9 @@ BEGIN
     BEGIN
         SET @Character = SUBSTRING(@FileStem COLLATE Latin1_General_100_BIN2, @Position, 1);
         IF UNICODE(@Character) < 32 OR CHARINDEX(@Character COLLATE Latin1_General_100_BIN2, N'<>:"/\|?*') > 0
+        BEGIN
             SET @FileStem = STUFF(@FileStem COLLATE Latin1_General_100_BIN2, @Position, 1, N'_');
+        END;
         SET @Position += 1;
     END;
 
@@ -37,7 +39,9 @@ BEGIN
     IF UPPER(@FirstComponent) COLLATE Latin1_General_100_BIN2 IN (N'CON', N'PRN', N'AUX', N'NUL')
        OR UPPER(@FirstComponent) COLLATE Latin1_General_100_BIN2 LIKE N'COM[1-9¹²³]'
        OR UPPER(@FirstComponent) COLLATE Latin1_General_100_BIN2 LIKE N'LPT[1-9¹²³]'
+    BEGIN
         SET @FileStem = N'_' + @FileStem;
+    END;
 
     SET @Sql = N'CREATE DATABASE ' + @QuotedDbName;
 
@@ -49,9 +53,13 @@ BEGIN
                 @DefaultLogPath  nvarchar(4000) = CONVERT(nvarchar(4000), SERVERPROPERTY(N'InstanceDefaultLogPath'));
 
         IF RIGHT(@DefaultDataPath, 1) <> N'\'
+        BEGIN
             SET @DefaultDataPath += N'\';
+        END;
         IF RIGHT(@DefaultLogPath, 1) <> N'\'
+        BEGIN
             SET @DefaultLogPath += N'\';
+        END;
 
         SET @Sql += N' ON PRIMARY (NAME = [DB_Primary], FILENAME = N'''
                  + REPLACE(@DefaultDataPath + @FileStem + N'.mdf', N'''', N'''''') + N''')
