@@ -4,7 +4,7 @@ GO
 
 
 ALTER PROCEDURE dbo.Check_AgLatency 
-    @Threshold int = 0,
+    @Threshold int = 5000,
     @DbName nvarchar(128) = N'%',
     @AgName nvarchar(128) = N'%',
     @UnhealthyOnly bit = 0
@@ -16,7 +16,7 @@ CREATED: 20140409
        Latency is based on the worst reported condition from both DMVs & perfmon.
 
 PARAMETERS
-* @Threshold - Default 0 - Minimum unsent log KB. Zero includes unavailable measurements.
+* @Threshold - Default 5000 - Minimum unsent log KB. Unknown values use 99999 for filtering and sorting.
 * @DbName        - Default % (anything) - Filter by DbName, Can be wildcarded
 * @AgName        - Default % (anything) - Filter by AgName, Can be wildcarded
 * @UnhealthyOnly - Default 0 (false) - Only select databases that have sync status of NOT HEALTHY
@@ -50,6 +50,7 @@ CREATE TABLE #AgStatus ( --drop table #AgStatus
     AgName sysname NOT NULL,
     DbName sysname NOT NULL ,
     IsPrimary bit NULL,
+    AgRole nvarchar(60) NULL,
     SynchState nvarchar(60) NULL,
     AgHealth nvarchar(60) NULL,
     SuspendReason nvarchar(60) NULL,
@@ -80,19 +81,21 @@ CREATE TABLE #Results (
     RedoEstSecCompletion bigint,
     LastCommitTime datetime2(3),
     MinutesBehind int,
-    SortOrder int
+    SortOrder int,
+    AgRole nvarchar(60)
     );
 
 
 -- Grab the current status from DMVs for AGs
 -- In a distributed AG, "ServerName" is the AG name we're sending to.
-INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, IsPrimary, SynchState, AgHealth, SuspendReason,
+INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, IsPrimary, AgRole, SynchState, AgHealth, SuspendReason,
                       SynchHardenedLSN, LastHardenedTime, LastRedoneTime, RedoEstSecCompletion,LastCommitTime)
     SELECT GETDATE() AS RunDate, 
            ar.replica_server_name AS ServerName, 
            ag.Name                        COLLATE SQL_Latin1_General_CP1_CI_AS AS AgName,
            COALESCE(adc.database_name, DB_NAME(ds.database_id)) AS DbName,
            ds.is_primary_replica AS IsPrimary,
+           rs.role_desc AS AgRole,
            ds.synchronization_state_desc  COLLATE SQL_Latin1_General_CP1_CI_AS AS SynchState, 
            ds.synchronization_health_desc COLLATE SQL_Latin1_General_CP1_CI_AS AS AgHealth, 
            ds. suspend_reason_desc        COLLATE SQL_Latin1_General_CP1_CI_AS AS SuspendReason, 
@@ -104,6 +107,7 @@ INSERT INTO #AgStatus (RunDate, ServerName, AgName, DbName, IsPrimary, SynchStat
     FROM sys.availability_groups AS ag
     JOIN sys.availability_replicas AS ar ON ar.group_id = ag.group_id 
     JOIN sys.dm_hadr_database_replica_states AS ds ON ds.group_id = ar.group_id AND ds.replica_id = ar.replica_id
+    LEFT JOIN sys.dm_hadr_availability_replica_states AS rs ON rs.group_id = ds.group_id AND rs.replica_id = ds.replica_id
     LEFT JOIN sys.availability_databases_cluster AS adc
         ON adc.group_id = ds.group_id AND adc.group_database_id = ds.group_database_id
     WHERE COALESCE(adc.database_name, DB_NAME(ds.database_id)) IS NOT NULL;
@@ -129,8 +133,9 @@ FROM sys.[dm_os_performance_counters]
 WHERE object_name LIKE N'%:Database Replica'
 AND counter_name  = 'Log Send Queue';
 
+-- Keep the legacy 99999 ranking for unknown queues while reporting the measurement as NULL.
 INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason, 
-                      LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, SortOrder)
+                      LastHardenedTime, LastRedoneTime, RedoEstSecCompletion, LastCommitTime, SortOrder, AgRole)
 SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
        COALESCE(ag.AgName,'') AS AgName,
        COALESCE(sync.DbName, ag.DbName) AS DbName,
@@ -144,11 +149,12 @@ SELECT COALESCE(ag.ServerName, @@SERVERNAME) AS ServerName,
        MAX(ag.LastCommitTime),
        CASE
             WHEN COALESCE(sync.DbName, ag.DbName) = '_Total' THEN 0
-            WHEN MAX(sync.UnsentLogKb) > '1000' THEN 2
+            WHEN COALESCE(MAX(sync.UnsentLogKb), 99999) > 1000 THEN 2
             WHEN COALESCE(ag.AgHealth,'') <> 'HEALTHY' THEN 3
             WHEN COALESCE(ag.SynchState,'') NOT IN ('SYNCHRONIZING','SYNCHRONIZED') THEN 4
             ELSE 5
-       END AS SortOrder
+       END AS SortOrder,
+       MAX(ag.AgRole) AS AgRole
 FROM #SendStatus AS sync
 FULL OUTER JOIN #AgStatus AS ag ON sync.ServerName = ag.ServerName AND sync.DbName = ag.DbName
 GROUP BY COALESCE(ag.ServerName,@@SERVERNAME),  COALESCE(ag.AgName,''), COALESCE(sync.DbName, ag.DbName),COALESCE(ag.SynchState,''), COALESCE(ag.AgHealth,''), 
@@ -170,7 +176,7 @@ JOIN #AgStatus AS p ON p.AgName = r.AgName AND p.DbName = r.DbName AND p.IsPrima
     ELSE
         SELECT * 
         FROM #Results AS r
-        WHERE (r.UnsentLogKb >= @Threshold OR (@Threshold = 0 AND r.UnsentLogKb IS NULL))
+        WHERE COALESCE(r.UnsentLogKb, 99999) >= @Threshold
         AND r.DbName LIKE @DbName
         AND r.AgName LIKE @AgName
         AND r.DbName = CASE
@@ -182,5 +188,5 @@ JOIN #AgStatus AS p ON p.AgName = r.AgName AND p.DbName = r.DbName AND p.IsPrima
                                     AND r2.DbName = r.DbName)
                             THEN r.DbName
                       END
-        ORDER BY SortOrder, UnsentLogKb DESC, ServerName, DbName;
+        ORDER BY SortOrder, COALESCE(r.UnsentLogKb, 99999) DESC, ServerName, DbName;
 GO
