@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.fn_split'))
-    EXEC ('CREATE FUNCTION dbo.fn_split() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' )
-GO
-
-
-ALTER FUNCTION dbo.fn_split (@Text nvarchar(4000), @Token nvarchar(20) = N',')
+CREATE OR ALTER FUNCTION dbo.fn_split (@Text nvarchar(4000), @Token nvarchar(20) = N',')
 RETURNS TABLE
 /*************************************************************************************************
 AUTHOR: Andy Mallon
