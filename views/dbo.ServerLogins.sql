@@ -1,5 +1,7 @@
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'V' AND object_id = object_id('dbo.ServerLogins'))
-    EXEC ('CREATE VIEW dbo.ServerLogins AS SELECT Result = ''This is a stub'';' )
+BEGIN
+    EXEC ('CREATE VIEW dbo.ServerLogins AS SELECT Result = ''This is a stub'';' );
+END;
 GO
 
 ALTER VIEW dbo.ServerLogins
