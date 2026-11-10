@@ -72,10 +72,21 @@ WHILE @@FETCH_STATUS=0
     SET @DbId = DB_ID(@DbName);
 
     -- dm_db_log_info was added in SQL Server 2016 SP2; keep the DBCC path for SP1.
+    IF @DbId IS NULL
+    BEGIN
+        FETCH NEXT FROM db_cur INTO @DbName;
+        CONTINUE;
+    END;
+
     IF OBJECT_ID(N'sys.dm_db_log_info') IS NOT NULL
         SET @Sql = N'UPDATE r
-SET VLF = (SELECT COUNT(*) FROM sys.dm_db_log_info(@DbId) AS li WHERE li.file_id = r.FileId)
+SET VLF = COALESCE(counts.VLF, 0)
 FROM #Results AS r
+LEFT JOIN (
+    SELECT li.file_id, VLF = COUNT(*)
+    FROM sys.dm_db_log_info(@DbId) AS li
+    GROUP BY li.file_id
+) AS counts ON counts.file_id = r.FileId
 WHERE r.DbName = @DbName;';
     ELSE
         SET @Sql = N'DELETE FROM #LogInfo;
