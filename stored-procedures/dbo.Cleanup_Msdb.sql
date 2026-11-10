@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Cleanup_Msdb'))
-    EXEC ('CREATE PROCEDURE dbo.Cleanup_Msdb AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Cleanup_Msdb
+CREATE OR ALTER PROCEDURE dbo.Cleanup_Msdb
     @RetainDays int = 30
 AS
 /*************************************************************************************************

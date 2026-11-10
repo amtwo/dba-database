@@ -1,8 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.PlanGuide_SetHintForProcedureStatement'))
-    EXEC ('CREATE PROCEDURE dbo.PlanGuide_SetHintForProcedureStatement AS SELECT ''This is a stub''')
-GO
-
-ALTER PROCEDURE dbo.PlanGuide_SetHintForProcedureStatement
+CREATE OR ALTER PROCEDURE dbo.PlanGuide_SetHintForProcedureStatement
     @DbName              sysname,
     @ProcedureSchema     sysname,
     @ProcedureName       sysname,

@@ -1,8 +1,4 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_Blocking'))
-    EXEC ('CREATE PROCEDURE dbo.Check_Blocking AS SELECT ''This is a stub''')
-GO
-
-ALTER PROCEDURE dbo.Check_Blocking
+﻿CREATE OR ALTER PROCEDURE dbo.Check_Blocking
     @BlockingDurationThreshold smallint = 60,
     @BlockedSessionThreshold smallint = NULL
 AS

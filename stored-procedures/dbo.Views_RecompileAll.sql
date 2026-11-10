@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Views_RecompileAll'))
-    EXEC ('CREATE PROCEDURE dbo.Views_RecompileAll AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Views_RecompileAll
+CREATE OR ALTER PROCEDURE dbo.Views_RecompileAll
     @DbName nvarchar(128),
     @Debug  bit = 0
 AS

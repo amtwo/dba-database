@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_OpenTransactions'))
-    EXEC ('CREATE PROCEDURE dbo.Check_OpenTransactions AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Check_OpenTransactions
+CREATE OR ALTER PROCEDURE dbo.Check_OpenTransactions
     @DurationThreshold smallint = 1,
     @OnlySleepingSessions bit = 0
 AS

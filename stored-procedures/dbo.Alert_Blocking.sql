@@ -1,8 +1,4 @@
-﻿IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Alert_Blocking'))
-    EXEC ('CREATE PROCEDURE dbo.Alert_Blocking AS SELECT ''This is a stub''')
-GO
-
-ALTER PROCEDURE dbo.Alert_Blocking
+﻿CREATE OR ALTER PROCEDURE dbo.Alert_Blocking
     @BlockingDurationThreshold smallint = 60,
     @BlockedSessionThreshold smallint = NULL,
     @EmailRecipients varchar(max) = 'you@example.com',

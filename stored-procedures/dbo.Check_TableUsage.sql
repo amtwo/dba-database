@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_TableUsage'))
-    EXEC ('CREATE PROCEDURE dbo.Check_TableUsage AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Check_TableUsage
+CREATE OR ALTER PROCEDURE dbo.Check_TableUsage
     @DbName sysname,
     @SchemaName sysname,
     @TableName sysname
