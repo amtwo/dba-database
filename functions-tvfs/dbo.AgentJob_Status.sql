@@ -31,7 +31,8 @@ AS
 RETURN
     SELECT
         IsRunning = running.IsRunning,
-        LastRunTime = COALESCE(ja.start_execution_date, historyTime.RunStartDateTime),
+        LastRunTime = COALESCE(ja.start_execution_date, DATETIMEFROMPARTS(jh.run_date / 10000, jh.run_date % 10000 / 100, jh.run_date % 100,
+                jh.run_time / 10000, jh.run_time % 10000 / 100, jh.run_time % 100, 0)),
         NextRunTime = ja.next_scheduled_run_date,
         LastJobStep = js.step_name,
         JobOutcome = CASE
@@ -48,17 +49,26 @@ RETURN
     CROSS APPLY (VALUES (
         CASE WHEN ja.start_execution_date IS NOT NULL AND ja.stop_execution_date IS NULL THEN 1 ELSE 0 END
     )) AS running(IsRunning)
-    LEFT JOIN msdb.dbo.sysjobsteps AS js
-        ON js.job_id = ja.job_id
-        AND js.step_id = ja.last_executed_step_id
     OUTER APPLY (
-        SELECT TOP (1) h.run_status, h.run_date, h.run_time, h.run_duration
+        SELECT TOP (1) h.instance_id, h.run_status, h.run_date, h.run_time
         FROM msdb.dbo.sysjobhistory AS h
         WHERE h.job_id = j.job_id
           AND h.step_id = 0
+          AND (ja.start_execution_date IS NULL OR h.instance_id = ja.job_history_id)
           AND h.run_status IN (0, 1, 2, 3)
         ORDER BY h.instance_id DESC
     ) AS jh
-    OUTER APPLY dbo.AgentJobHistory_TimeConvert(jh.run_date, jh.run_time, jh.run_duration) AS historyTime
+    OUTER APPLY (
+        SELECT TOP (1) completed.last_executed_step_id
+        FROM msdb.dbo.sysjobactivity AS completed
+        WHERE completed.job_id = j.job_id
+          AND completed.job_history_id = jh.instance_id
+          AND completed.stop_execution_date IS NOT NULL
+        ORDER BY completed.session_id DESC
+    ) AS lastCompleted
+    LEFT JOIN msdb.dbo.sysjobsteps AS js
+        ON js.job_id = j.job_id
+        AND js.step_id = CASE WHEN running.IsRunning = 1 THEN ja.last_executed_step_id
+                              ELSE COALESCE(ja.last_executed_step_id, lastCompleted.last_executed_step_id) END
     WHERE j.name = @JobName;
 GO

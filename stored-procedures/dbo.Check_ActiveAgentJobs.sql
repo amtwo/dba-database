@@ -37,14 +37,12 @@ BEGIN
     INSERT INTO #Jobs (session_id, JobName, ExecutionStatus)
     SELECT s.session_id,
             jn.JobName,
-            COALESCE(REPLACE(s.program_name, parsed.JobIdHex, jn.JobName), s.program_name)
+            COALESCE(REPLACE(s.program_name, jobHex.JobIdHex, j.name), s.program_name)
     FROM sys.dm_exec_sessions AS s
-    OUTER APPLY dbo.SqlAgentJobId_Get(s.program_name) AS parsed
-    OUTER APPLY (
-        SELECT j.name AS JobName
-        FROM msdb.dbo.sysjobs AS j
-        WHERE j.job_id = CONVERT(uniqueidentifier, parsed.JobIdBinary)
-    ) AS jn
+    CROSS APPLY (VALUES (SUBSTRING(s.program_name, 30, 34))) AS jobHex(JobIdHex)
+    LEFT JOIN msdb.dbo.sysjobs AS j
+        ON j.job_id = CASE WHEN LEN(jobHex.JobIdHex) = 34
+                           THEN CONVERT(uniqueidentifier, TRY_CONVERT(binary(16), jobHex.JobIdHex, 1)) END
     WHERE s.program_name LIKE 'SQLAgent - TSQL JobStep (Job 0x%';
 
 
