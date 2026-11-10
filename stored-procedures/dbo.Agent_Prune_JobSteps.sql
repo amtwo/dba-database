@@ -25,19 +25,11 @@ EXAMPLES:
 BEGIN
     SET NOCOUNT ON;
 
-    IF @retain_step_number IS NULL OR @retain_step_number < 0
-    BEGIN
-        RAISERROR('@retain_step_number must be zero or greater.', 16, 1);
-        RETURN;
-    END;
+    DECLARE @job_id UNIQUEIDENTIFIER = (SELECT job_id FROM msdb.dbo.sysjobs WHERE [name] = @job_name);
 
-    DECLARE @job_id uniqueidentifier = (SELECT job_id FROM msdb.dbo.sysjobs WHERE name = @job_name),
-            @step_id int,
-            @return_code int;
-
-    IF @job_id IS NULL
+    IF @job_id IS NULL OR @retain_step_number IS NULL OR @retain_step_number < 0
     BEGIN
-        RAISERROR('The specified SQL Agent job does not exist or is not visible.', 16, 1);
+        RAISERROR('Specify an existing job and a nonnegative step number.', 16, 1);
         RETURN;
     END;
 
@@ -71,31 +63,31 @@ BEGIN
     INSERT INTO #sysjobsteps
     EXEC msdb.dbo.sp_help_jobstep @job_id = @job_id;
 
-    DECLARE steps_to_prune CURSOR LOCAL STATIC READ_ONLY FOR
-        SELECT step_id
-        FROM #sysjobsteps
-        WHERE step_id > @retain_step_number
-        ORDER BY step_id DESC;
 
-    OPEN steps_to_prune;
-    FETCH NEXT FROM steps_to_prune INTO @step_id;
-    WHILE @@FETCH_STATUS = 0
+    DECLARE @pruneSql nvarchar(max) = (
+        SELECT N'EXEC @ReturnCode = msdb.dbo.sp_delete_jobstep @job_id = @jid, @step_id = '
+            + CONVERT(nvarchar(12), js.step_id) + N';'
+            + N' IF @ReturnCode <> 0 THROW 50000, ''SQL Agent job-step deletion failed.'', 1;'
+            + NCHAR(13) + NCHAR(10)
+        FROM #sysjobsteps AS js
+        WHERE js.step_id > @retain_step_number
+        ORDER BY js.step_id DESC
+        FOR XML PATH(''), TYPE
+    ).value('.', 'nvarchar(max)');
+
+    IF (@pruneSql <> N'')
     BEGIN
+        SET @pruneSql = N'DECLARE @ReturnCode int;' + NCHAR(13) + NCHAR(10) + @pruneSql;
         IF @Debug = 1
         BEGIN
-            PRINT CONCAT(N'Would delete step ', @step_id, N' from job ', QUOTENAME(@job_name), N'.');
-        END;
+            EXEC dbo.Debug_Print @DebugMessage = @pruneSql;
+        END
         ELSE
         BEGIN
-            EXEC @return_code = msdb.dbo.sp_delete_jobstep @job_id = @job_id, @step_id = @step_id;
-            IF @return_code <> 0
-                THROW 50000, 'SQL Agent job-step deletion failed.', 1;
+            EXEC sys.sp_executesql @pruneSql, N'@jid uniqueidentifier', @jid = @job_id;
         END;
-
-        FETCH NEXT FROM steps_to_prune INTO @step_id;
     END;
 
-    CLOSE steps_to_prune;
-    DEALLOCATE steps_to_prune;
-END;
+
+END
 GO
