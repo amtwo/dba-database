@@ -22,14 +22,11 @@ CREATED: 20171012
     The ID is used for efficiency when doing deletes, and the date/time column is needed to
     determine when data ages out. 
         **The date/time column should be the date inserted**
-          The code assumes that both the ID & date/time columns are ever-increasing.
+          The ID column is used to batch deletes; each delete also checks the retention cutoff.
     This includes two controls to help minimize blocking and prevent the transaction log from
     growing during a large data cleanup. These two params can be adjusted to fine-tune the cleanup
        @ChunkSize controls how the max size of each delete operation.
        @LoopWaitTime introduces a wait between each delete to throttle activity between log backups
-
-    KNOWN LIMITATION: If you reseed the identity column back to 0, you're going to delete all
-        your data. All of it. Don't do that.
 
 PARAMETERS
 * @DbName         - Name of the database containing the table
@@ -57,6 +54,13 @@ BEGIN
     RETURN;
 END;
 
+IF @RetainDays IS NULL OR @RetainDays < 0
+BEGIN
+    RAISERROR('@RetainDays must be zero or greater.', 16, 1);
+    RETURN;
+END;
+
+DECLARE @Cutoff datetime = DATEADD(DAY, -@RetainDays, GETDATE());
 DECLARE @MaxID bigint;
 DECLARE @ChunkID bigint;
 DECLARE @ChunkEndID bigint;
@@ -65,19 +69,19 @@ DECLARE @Sql nvarchar(max);
 --Shuffle this into datetime datatype to make WAITFOR DELAY happy. Still use time on the param for better validation
 DECLARE @LoopWaitDateTime datetime = @LoopWaitTime;
 --Plop the quoted DB.Schema.Table into one variable so I don't screw it up later.
-DECLARE @SqlObjectName nvarchar(386) = QUOTENAME(@DbName) + N'.' + QUOTENAME(@SchemaName) + N'.' + QUOTENAME(@TableName);
+DECLARE @SqlObjectName nvarchar(776) = QUOTENAME(@DbName) + N'.' + QUOTENAME(@SchemaName) + N'.' + QUOTENAME(@TableName);
 
 --
 -- Get the range of ID values we want to delete
 --
-SELECT @sql = N'SELECT @ChunkID = MIN(' + QUOTENAME(@IDColumnName) + N'), @MaxID = MAX(' + QUOTENAME(@IDColumnName) + N') FROM ' + @SqlObjectName + N' WHERE ' + QUOTENAME(@DateColumnName) + ' < DATEADD(DAY,-1*@RetainDays,GETDATE());';
+SELECT @sql = N'SELECT @ChunkID = MIN(' + QUOTENAME(@IDColumnName) + N'), @MaxID = MAX(' + QUOTENAME(@IDColumnName) + N') FROM ' + @SqlObjectName + N' WHERE ' + QUOTENAME(@DateColumnName) + ' < @Cutoff;';
 
 IF @Debug = 1
 BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
 END;
 -- Even in Debug mode, we run this to get min/max values. We're not changing data yet.
-EXEC sp_executesql @stmt = @sql, @params = N'@RetainDays int, @ChunkID bigint OUT, @MaxID bigint OUT', @RetainDays = @RetainDays, @ChunkID = @ChunkID OUT, @MaxID = @MaxID OUT;
+EXEC sp_executesql @stmt = @sql, @params = N'@Cutoff datetime, @ChunkID bigint OUT, @MaxID bigint OUT', @Cutoff = @Cutoff, @ChunkID = @ChunkID OUT, @MaxID = @MaxID OUT;
 
 --
 --Now loop through those values and delete 
@@ -91,11 +95,11 @@ WHILE @ChunkID <= @MaxID
                  ELSE CONVERT(decimal(20,0), @ChunkID) + @ChunkSize - 1
             END);
 
-        SELECT @sql = N'DELETE TOP (@ChunkSize) x FROM ' + @SqlObjectName + N' AS x WHERE x.' + QUOTENAME(@IDColumnName) + N' <= @ChunkEndID AND x.' + QUOTENAME(@IDColumnName) + N' <= @MaxID;'
+        SELECT @sql = N'DELETE TOP (@ChunkSize) x FROM ' + @SqlObjectName + N' AS x WHERE x.' + QUOTENAME(@IDColumnName) + N' <= @ChunkEndID AND x.' + QUOTENAME(@IDColumnName) + N' <= @MaxID AND x.' + QUOTENAME(@DateColumnName) + N' < @Cutoff;';
         --if we're not in debug mode, then run the delete
         IF @Debug = 0
             BEGIN
-                EXEC sp_executesql @stmt = @sql, @params = N'@ChunkSize int, @ChunkEndID bigint, @MaxID bigint', @ChunkSize = @ChunkSize, @ChunkEndID = @ChunkEndID, @MaxID = @MaxID;
+                EXEC sp_executesql @stmt = @sql, @params = N'@ChunkSize int, @ChunkEndID bigint, @MaxID bigint, @Cutoff datetime', @ChunkSize = @ChunkSize, @ChunkEndID = @ChunkEndID, @MaxID = @MaxID, @Cutoff = @Cutoff;
                 WAITFOR DELAY @LoopWaitDateTime;
             END;
         --if we're in debug mode, just print the DELETE statement
