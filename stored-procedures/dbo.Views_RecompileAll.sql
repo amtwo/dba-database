@@ -44,12 +44,12 @@ CREATE TABLE #Commands (
     )
 
 DECLARE db_cur CURSOR LOCAL FAST_FORWARD FOR
-    SELECT name AS DbName
-    FROM sys.databases 
-    WHERE state_desc = N'ONLINE'
-      AND HAS_DBACCESS(name) = 1
-      AND (replica_id IS NULL OR sys.fn_hadr_is_primary_replica(name) = 1)
-      AND (@DbName IS NULL OR name = @DbName);
+    SELECT d.name AS DbName
+    FROM sys.databases AS d
+    WHERE d.state_desc = N'ONLINE'
+      AND HAS_DBACCESS(d.name) = 1
+      AND dbo.AGDbRole_Get(d.name) = CASE WHEN d.replica_id IS NULL THEN N'ONLINE' ELSE N'PRIMARY' END
+      AND (@DbName IS NULL OR d.name = @DbName);
 
 DECLARE cmd_cur CURSOR LOCAL FAST_FORWARD FOR
     SELECT DbName, ViewName FROM #Commands;
