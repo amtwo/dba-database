@@ -1,5 +1,7 @@
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_LogVLF'))
-    EXEC ('CREATE PROCEDURE dbo.Check_LogVLF AS SELECT ''This is a stub''')
+BEGIN
+    EXEC ('CREATE PROCEDURE dbo.Check_LogVLF AS SELECT ''This is a stub''');
+END;
 GO
 
 
@@ -79,6 +81,7 @@ WHILE @@FETCH_STATUS=0
     END;
 
     IF OBJECT_ID(N'sys.dm_db_log_info') IS NOT NULL
+    BEGIN
         SET @Sql = N'UPDATE r
 SET VLF = COALESCE(counts.VLF, 0)
 FROM #Results AS r
@@ -88,7 +91,9 @@ LEFT JOIN (
     GROUP BY li.file_id
 ) AS counts ON counts.file_id = r.FileId
 WHERE r.DbName = @DbName;';
+    END
     ELSE
+    BEGIN
         SET @Sql = N'DELETE FROM #LogInfo;
 INSERT INTO #LogInfo (RecoveryUnitID, fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn)
 EXEC sys.sp_executesql N''DBCC LOGINFO (@DbId) WITH NO_INFOMSGS;'', N''@DbId int'', @DbId = @DbId;
@@ -96,9 +101,12 @@ UPDATE r
 SET VLF = (SELECT COUNT(*) FROM #LogInfo AS li WHERE li.fileid = r.FileId)
 FROM #Results AS r
 WHERE r.DbName = @DbName;';
+    END;
 
     IF @Debug = 1
+    BEGIN
         EXEC dbo.Debug_Print @DebugMessage = @Sql;
+    END;
     EXEC sys.sp_executesql @Sql, N'@DbId int, @DbName sysname', @DbId = @DbId, @DbName = @DbName;
     FETCH Next FROM db_cur INTO @DbName;
   END;
