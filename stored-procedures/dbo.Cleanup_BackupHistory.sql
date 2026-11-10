@@ -27,6 +27,13 @@ MODIFICATIONS:
  BEGIN
    SET NOCOUNT ON;
 
+   IF @@TRANCOUNT <> 0 OR (@@OPTIONS & 2) = 2
+   BEGIN
+       SET XACT_ABORT OFF;
+       RAISERROR('Run Cleanup_BackupHistory without an existing or implicit transaction.', 16, 1);
+       RETURN;
+   END;
+
    CREATE TABLE #backup_set_id      (backup_set_id INT PRIMARY KEY CLUSTERED);
    CREATE TABLE #media_set_id       (media_set_id INT PRIMARY KEY CLUSTERED);
    CREATE TABLE #restore_history_id (restore_history_id INT PRIMARY KEY CLUSTERED);
