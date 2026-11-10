@@ -133,7 +133,8 @@ BEGIN
     FROM #Results AS r;
 END;
 
-SELECT @sql = STRING_AGG(r.UpdateStatsSql, NCHAR(13) + NCHAR(10))
+DECLARE @LineBreak nchar(2) = NCHAR(13) + NCHAR(10);
+SELECT @sql = STRING_AGG(r.UpdateStatsSql, @LineBreak)
 FROM #Results AS r;
 
 IF @Debug = 1
