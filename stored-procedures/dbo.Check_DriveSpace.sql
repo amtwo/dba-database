@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND object_id = object_id('dbo.Check_DriveSpace'))
-    EXEC ('CREATE PROCEDURE dbo.Check_DriveSpace AS SELECT ''This is a stub''')
-GO
-
-
-ALTER PROCEDURE dbo.Check_DriveSpace
+CREATE OR ALTER PROCEDURE dbo.Check_DriveSpace
 AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
@@ -39,7 +34,7 @@ CREATE TABLE #Drives (
     file_system_type nvarchar(512),
     total_GB numeric(10,3),
     available_GB numeric(10,3),
-    available_percent numeric(5,3)
+    available_percent numeric(5,2)
     );
 
 --Cursors
@@ -65,18 +60,15 @@ CLOSE filestats_cur;
 DEALLOCATE filestats_cur;
 
 --dedupe info to get drive info
-INSERT INTO #Drives (volume_mount_point, file_system_type, total_GB, available_GB)
-SELECT volume_mount_point, file_system_type, min(total_bytes)/1024/1024/1024., min(available_bytes)/1024/1024/1024.
-FROM #FileStats
-GROUP BY volume_mount_point, file_system_type;
+INSERT INTO #Drives (volume_mount_point, file_system_type, total_GB, available_GB, available_percent)
+SELECT fs.volume_mount_point,
+       fs.file_system_type,
+       MIN(fs.total_bytes) / 1073741824.0,
+       MIN(fs.available_bytes) / 1073741824.0,
+       100.0 * MIN(fs.available_bytes) / NULLIF(MIN(fs.total_bytes), 0)
+FROM #FileStats AS fs
+GROUP BY fs.volume_mount_point, fs.file_system_type;
 
-UPDATE #Drives 
-SET available_percent = available_GB/total_GB*100;
- 
-
-SELECT * FROM #Drives;
-
-
+SELECT d.volume_mount_point, d.file_system_type, d.total_GB, d.available_GB, d.available_percent
+FROM #Drives AS d;
 GO
-
-
