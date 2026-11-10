@@ -1,5 +1,7 @@
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.AgentJob_Status'))
-    EXEC ('CREATE FUNCTION dbo.AgentJob_Status() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' )
+BEGIN
+    EXEC ('CREATE FUNCTION dbo.AgentJob_Status() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' );
+END;
 GO
 
 
