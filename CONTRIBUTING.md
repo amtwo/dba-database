@@ -57,6 +57,7 @@ Automated coding agents follow this document for code conventions and [AGENTS.md
 7. ANSI joins, no `SELECT *` in shipped code, alias columns with `=`.
 8. Dynamic SQL goes through `sys.sp_executesql` with real parameters, never string-concatenated values.
 9. `SET NOCOUNT ON;` at the top of every proc.
+10. Wrap every `IF` and `ELSE` body in `BEGIN` and `END`.
 
 The rest of this doc is the *why*.
 
@@ -146,6 +147,8 @@ MODIFICATIONS:
 *************************************************************************************************/
 ```
 
+For a view, put the flowerbox immediately after `AS`, before the query or CTE.
+
 Conventions inside the box:
 
 - **`CREATED:` uses `YYYYMMDD`.** Unambiguous, sorts correctly, and sidesteps every regional date-format argument. Same reason I never use date shorthand in code — see [date/time shorthand](https://sqlblog.org/2011/09/20/bad-habits-to-kick-using-shorthand-with-date-time-operations).
@@ -183,6 +186,7 @@ You'll spot two violations in the repo: the `Agent_Upsert_*` procs use `snake_ca
 
 ## Formatting
 
+- **Use `BEGIN` and `END` for every `IF` and `ELSE` body.** This includes single statements, early returns, install and migration guards, and conditionals in generated SQL. For an `ELSE IF` chain, put the nested `IF` inside the outer `ELSE` block. This rule applies to control-flow statements. `CASE` expressions keep their normal syntax.
 - **4 spaces, no tabs.** Some interim files slipped in tabs (`Dst_Dates`, the old `sp_` proc); the newest code is spaces and that's the standard.
 - **Keywords UPPERCASE** (`SELECT`, `FROM`, `JOIN`, `CASE`, `WHERE`).
 - **Data types lowercase** — see the next section, it's a real rule, not a vibe.
@@ -228,7 +232,7 @@ You'll spot two violations in the repo: the `Agent_Upsert_*` procs use `snake_ca
 
 ## Aliasing
 
-- **Table aliases use `AS` and mean something.** `s` for `sys.stats`, `sp` for `sys.dm_db_stats_properties`, `sch` for schemas. Short is fine; [`a`, `b`, `c` / `t1`, `t2`, `t3` is not](https://sqlblog.org/2009/10/08/bad-habits-to-kick-using-table-aliases-like-a-b-c-or-t1-t2-t3). And [alias *every* table in a multi-table query or none of them](https://sqlblog.org/2010/02/16/bad-habits-to-kick-inconsistent-table-aliasing) — don't go halfway.
+- **Table aliases use `AS` and mean something.** `s` for `sys.stats`, `sp` for `sys.dm_db_stats_properties`, `sch` for schemas. Short is fine; [`a`, `b`, `c` / `t1`, `t2`, `t3` is not](https://sqlblog.org/2009/10/08/bad-habits-to-kick-using-table-aliases-like-a-b-c-or-t1-t2-t3). And [alias *every* table in a multi-table query or none of them](https://sqlblog.org/2010/02/16/bad-habits-to-kick-inconsistent-table-aliasing) — don't go halfway. Qualify column references consistently with their table aliases, including in predicates and sorting.
 - **Column aliases use `=`, not `AS`:**
 
   ```sql
