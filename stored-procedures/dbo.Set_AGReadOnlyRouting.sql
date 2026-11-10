@@ -90,7 +90,7 @@ SET NOCOUNT ON;
 -- Validate inputs! 
 --
 --
-IF (@Action NOT IN ('DISABLE','ENABLE') )
+IF (@Action IS NULL OR @Action NOT IN ('DISABLE','ENABLE'))
 BEGIN
     -- Did not specify a valid Action
     RAISERROR ('@Action must be specified as either "ENABLE" or "DISABLE".',16,1)
@@ -175,7 +175,7 @@ BEGIN
     SELECT ar.group_id,
             ar.replica_id,
             ar.replica_server_name,
-            RoutingList = STRING_AGG('N''' + ror.replica_server_name + '''',',') WITHIN GROUP (ORDER BY IIF(ror.replica_server_name = ar.replica_server_name, 9, 0), ar.replica_server_name)
+            RoutingList = STRING_AGG(CONVERT(nvarchar(max), N'N' + QUOTENAME(ror.replica_server_name, NCHAR(39))), N',') WITHIN GROUP (ORDER BY IIF(ror.replica_server_name = ar.replica_server_name, 9, 0), ror.replica_server_name)
     FROM sys.availability_replicas AS ar
     JOIN sys.availability_replicas AS ror ON ror.group_id = ar.group_id
     WHERE ar.replica_server_name LIKE @ModifyReplicaPattern
@@ -187,13 +187,14 @@ BEGIN
     SELECT  ar.group_id,
             ar.replica_id,
             ar.replica_server_name,
-            STRING_AGG('N''' + ror.replica_server_name + '''',',') WITHIN GROUP (ORDER BY l.sort)
+            STRING_AGG(CONVERT(nvarchar(max), N'N' + QUOTENAME(ror.replica_server_name, NCHAR(39))), N',') WITHIN GROUP (ORDER BY l.sort)
     FROM sys.availability_replicas AS ar
     JOIN sys.availability_replicas AS ror ON ror.group_id = ar.group_id
     JOIN (SELECT Sort = csv.ID,
                     ReplicaName = csv.Value
             FROM dbo.fn_split(@RoutingListCSV,N',') AS csv) AS l ON l.ReplicaName = ror.replica_server_name
     WHERE @RoutingListPattern IS NULL
+    AND ar.replica_server_name LIKE @ModifyReplicaPattern
     AND ror.secondary_role_allow_connections IN (1,2)
     GROUP BY ar.group_id, ar.replica_id, ar.replica_server_name
     
