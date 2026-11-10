@@ -112,28 +112,31 @@ BEGIN
                 ON j.notify_email_operator_id = op.id
             WHERE j.name = @job_name;
         END
-        ELSE IF EXISTS (SELECT 1 FROM sys.databases WHERE name = N'rdsadmin')
-        BEGIN
-            /* You can't update the owner & passing it on an update makes it fail. So we skip it on RDS. */
-            EXEC msdb.dbo.sp_update_job
-                    @job_name                   = @job_name,
-                    @enabled                    = @enabled,
-                    @description                = @description,
-                    @category_name              = @category_name,
-                    @notify_level_email         = @notify_level_email,
-                    @notify_email_operator_name = @notify_email_operator_name;
-        END
         ELSE
         BEGIN
-            EXEC msdb.dbo.sp_update_job
-                    @job_name                   = @job_name,
-                    @enabled                    = @enabled,
-                    @description                = @description,
-                    @category_name              = @category_name,
-                    @owner_login_name           = @owner_login_name,
-                    @notify_level_email         = @notify_level_email,
-                    @notify_email_operator_name = @notify_email_operator_name;
-        END
+            IF EXISTS (SELECT 1 FROM sys.databases WHERE name = N'rdsadmin')
+            BEGIN
+                /* You can't update the owner & passing it on an update makes it fail. So we skip it on RDS. */
+                EXEC msdb.dbo.sp_update_job
+                        @job_name                   = @job_name,
+                        @enabled                    = @enabled,
+                        @description                = @description,
+                        @category_name              = @category_name,
+                        @notify_level_email         = @notify_level_email,
+                        @notify_email_operator_name = @notify_email_operator_name;
+            END
+            ELSE
+            BEGIN
+                EXEC msdb.dbo.sp_update_job
+                        @job_name                   = @job_name,
+                        @enabled                    = @enabled,
+                        @description                = @description,
+                        @category_name              = @category_name,
+                        @owner_login_name           = @owner_login_name,
+                        @notify_level_email         = @notify_level_email,
+                        @notify_email_operator_name = @notify_email_operator_name;
+            END
+        END;
     END
 END
 GO

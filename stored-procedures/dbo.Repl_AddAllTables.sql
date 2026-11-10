@@ -60,19 +60,32 @@ BEGIN
 
             SET @IsInsideQuote = CASE WHEN @IsInsideQuote = 1 THEN 0 ELSE 1 END;
         END
-        ELSE IF @CurrentChar = N',' AND @IsInsideQuote = 0
+        ELSE
         BEGIN
-            IF @ExcludedTableName <> N''
-                INSERT INTO #ExcludedTables (ArticleName) VALUES (@ExcludedTableName);
+            IF @CurrentChar = N',' AND @IsInsideQuote = 0
+            BEGIN
+                IF @ExcludedTableName <> N''
+                BEGIN
+                    INSERT INTO #ExcludedTables (ArticleName) VALUES (@ExcludedTableName);
+                END;
 
-            SET @ExcludedTableName = N'';
-        END
-        ELSE IF @IsInsideQuote = 1
-            SET @ExcludedTableName += @CurrentChar;
-        ELSE IF @CurrentChar NOT IN (N' ', NCHAR(9), NCHAR(10), NCHAR(13))
-        BEGIN
-            RAISERROR ('@ExcludeTables must be a comma-separated list of single-quoted table names.', 16, 1);
-            RETURN -1;
+                SET @ExcludedTableName = N'';
+            END
+            ELSE
+            BEGIN
+                IF @IsInsideQuote = 1
+                BEGIN
+                    SET @ExcludedTableName += @CurrentChar;
+                END
+                ELSE
+                BEGIN
+                    IF @CurrentChar NOT IN (N' ', NCHAR(9), NCHAR(10), NCHAR(13))
+                    BEGIN
+                        RAISERROR ('@ExcludeTables must be a comma-separated list of single-quoted table names.', 16, 1);
+                        RETURN -1;
+                    END;
+                END;
+            END;
         END;
 
         SET @Position += 1;
@@ -85,7 +98,9 @@ BEGIN
     END;
 
     IF @ExcludedTableName <> N''
+    BEGIN
         INSERT INTO #ExcludedTables (ArticleName) VALUES (@ExcludedTableName);
+    END;
 END;
 
 CREATE TABLE #article (

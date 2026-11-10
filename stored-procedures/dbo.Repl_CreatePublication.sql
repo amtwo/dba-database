@@ -70,7 +70,9 @@ EXEC sys.sp_replicationdboption
     @value = N''true'';';
 
 IF @Debug = 0
+BEGIN
     EXEC sys.sp_executesql @sql, N'@PubDbName nvarchar(256)', @PubDbName = @PubDbName;
+END
 ELSE
 BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
@@ -108,10 +110,12 @@ EXEC sys.sp_addpublication
     @enabled_for_het_sub = N''false'';';
 
 IF @Debug = 0
+BEGIN
     EXEC sys.sp_executesql @sql,
         N'@PublicationName nvarchar(256), @PublicationDescription nvarchar(1024)',
         @PublicationName = @PublicationName,
         @PublicationDescription = @PublicationDescription;
+END
 ELSE
 BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
@@ -139,9 +143,11 @@ EXEC sys.sp_addpublication_snapshot
     @publisher_security_mode = 1;';
 
 IF @Debug = 0
+BEGIN
     EXEC sys.sp_executesql @sql,
         N'@PublicationName nvarchar(256)',
         @PublicationName = @PublicationName;
+END
 ELSE
 BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
@@ -159,11 +165,13 @@ BEGIN
             @publisher_db = @PubDbName,
             @redirected_publisher = @Publisher;';
     IF @Debug = 0
+    BEGIN
         EXEC sys.sp_executesql @sql,
             N'@OriginalPublisher sysname, @PubDbName nvarchar(256), @Publisher nvarchar(256)',
             @OriginalPublisher = @@SERVERNAME,
             @PubDbName = @PubDbName,
             @Publisher = @Publisher;
+    END
     ELSE
     BEGIN
         EXEC dbo.Debug_Print @DebugMessage = @sql;

@@ -302,7 +302,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM @Worklist WHERE Skipped = 0)
     BEGIN
         IF @Debug = 1
+        BEGIN
             EXEC dbo.Debug_Print @DebugMessage = N'No accessible databases matched @DbList. Nothing to do.';
+        END;
         RETURN;
     END;
 

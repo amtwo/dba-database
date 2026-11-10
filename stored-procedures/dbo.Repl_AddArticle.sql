@@ -103,6 +103,7 @@ SET @sql = N'EXEC ' + @QuotedPubDbName + N'.sys.sp_addarticle
             @del_cmd                        = @DeleteCommand'
 
 IF @Debug = 0
+BEGIN
     EXEC sys.sp_executesql @stmt = @sql,
                 @params             = N'@PublicationName nvarchar(256),
                                         @ArticleName     nvarchar(256),
@@ -116,8 +117,11 @@ IF @Debug = 0
                 @InsertCommand      = @InsertCommand,
                 @UpdateCommand      = @UpdateCommand,
                 @DeleteCommand      = @DeleteCommand;
+END
 ELSE
+BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
+END;
     PRINT N'    Publication:   ' + @PublicationName
     PRINT N'    Article:       ' + @ArticleName
     PRINT N'    SchemaOption:  ' + CONVERT(nvarchar(max), @SchemaOption)

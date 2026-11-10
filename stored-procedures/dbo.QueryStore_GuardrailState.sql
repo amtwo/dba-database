@@ -76,10 +76,12 @@ CREATE TABLE #Hashes
 );
 
 IF @QueryHashes IS NOT NULL
+BEGIN
     INSERT #Hashes (query_hash)
     SELECT DISTINCT CONVERT(binary(8), LTRIM(RTRIM(ss.value)), 1)
     FROM STRING_SPLIT(@QueryHashes, N',') AS ss
     WHERE LTRIM(RTRIM(ss.value)) <> N'';
+END;
 
 SET @Sql = N'
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
@@ -88,11 +90,13 @@ SET LOCK_TIMEOUT 1000;
 DECLARE @ActiveSince datetimeoffset(7) = DATEADD(DAY, -@ActiveDays, SYSDATETIMEOFFSET());
 
 IF @QueryHashes IS NULL
+BEGIN
     INSERT #Hashes (query_hash)
     SELECT DISTINCT q.query_hash
     FROM sys.query_store_query AS q
     WHERE EXISTS (SELECT 1 FROM sys.query_store_query_hints AS h WHERE h.query_id = q.query_id)
        OR EXISTS (SELECT 1 FROM sys.query_store_plan AS p WHERE p.query_id = q.query_id AND p.is_forced_plan = 1);
+END;
 
 CREATE TABLE #Variants
 (
@@ -187,7 +191,9 @@ OUTER APPLY (   -- a sibling''s forced plan shape that also exists under this va
 ORDER BY v.query_hash, v.last_execution_time DESC;';
 
 IF @Debug = 1
+BEGIN
     PRINT @Sql;
+END;
 
 DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
 DECLARE @RestoreLockTimeout nvarchar(50) = N'SET LOCK_TIMEOUT ' + CONVERT(nvarchar(12), @PreviousLockTimeout);

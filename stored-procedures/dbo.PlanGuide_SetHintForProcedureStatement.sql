@@ -152,7 +152,9 @@ IF @DropExisting = 1 AND EXISTS (SELECT 1 FROM sys.plan_guides WHERE name = @Pla
 BEGIN
     EXEC @ReturnCode = sys.sp_control_plan_guide N''DROP'', @PlanGuideName;
     IF @ReturnCode <> 0
+    BEGIN
         THROW 60003, ''Could not drop the existing plan guide.'', 1;
+    END;
 END;
 
 EXEC @ReturnCode = sys.sp_create_plan_guide
@@ -163,7 +165,9 @@ EXEC @ReturnCode = sys.sp_create_plan_guide
     @params = NULL,
     @hints = @HintText;
 IF @ReturnCode <> 0
-    THROW 60004, ''Could not create the requested plan guide.'', 1;';
+BEGIN
+    THROW 60004, ''Could not create the requested plan guide.'', 1;
+END;';
 
     IF @Debug = 1
     BEGIN
@@ -190,7 +194,9 @@ IF @ReturnCode <> 0
     END TRY
     BEGIN CATCH
         IF XACT_STATE() <> 0
+        BEGIN
             ROLLBACK TRANSACTION;
+        END;
         THROW;
     END CATCH;
 END;

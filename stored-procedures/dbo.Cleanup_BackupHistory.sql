@@ -56,37 +56,49 @@ MODIFICATIONS:
    WHERE backup_set_id IN (SELECT backup_set_id
                            FROM   #backup_set_id);
    IF (@@error > 0)
+   BEGIN
      GOTO Quit;
+   END;
 
    DELETE FROM msdb.dbo.backupfilegroup
    WHERE backup_set_id IN (SELECT backup_set_id
                            FROM   #backup_set_id);
    IF (@@error > 0)
+   BEGIN
      GOTO Quit;
+   END;
 
    DELETE FROM msdb.dbo.restorefile
    WHERE restore_history_id IN (SELECT restore_history_id
                                 FROM   #restore_history_id);
    IF (@@error > 0)
+   BEGIN
      GOTO Quit;
+   END;
 
    DELETE FROM msdb.dbo.restorefilegroup
    WHERE restore_history_id IN (SELECT restore_history_id
                                 FROM   #restore_history_id);
    IF (@@error > 0)
+   BEGIN
      GOTO Quit;
+   END;
 
    DELETE FROM msdb.dbo.restorehistory
    WHERE restore_history_id IN (SELECT restore_history_id
                                 FROM   #restore_history_id);
    IF (@@error > 0)
+   BEGIN
      GOTO Quit;
+   END;
 
    DELETE FROM msdb.dbo.backupset
    WHERE backup_set_id IN (SELECT backup_set_id
                            FROM   #backup_set_id);
    IF (@@error > 0)
+   BEGIN
      GOTO Quit;
+   END;
 
    DELETE msdb.dbo.backupmediafamily
    FROM msdb.dbo.backupmediafamily bmf
@@ -96,7 +108,9 @@ MODIFICATIONS:
            FROM msdb.dbo.backupset
            WHERE media_set_id = bmf.media_set_id) = 0);
    IF (@@error > 0)
+   BEGIN
      GOTO Quit;
+   END;
 
    DELETE msdb.dbo.backupmediaset
    FROM msdb.dbo.backupmediaset bms
@@ -106,7 +120,9 @@ MODIFICATIONS:
            FROM msdb.dbo.backupset
            WHERE media_set_id = bms.media_set_id) = 0);
    IF (@@error > 0)
+   BEGIN
      GOTO Quit;
+   END;
 
    COMMIT TRANSACTION;
    RETURN;

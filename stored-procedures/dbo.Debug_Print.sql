@@ -81,18 +81,26 @@ BEGIN
             END;
 
         IF @breakOffset = 0
+        BEGIN
             SET @breakOffset = CHARINDEX(NCHAR(9), @revWindow);     -- Tab
+        END;
 
         IF @breakOffset = 0
+        BEGIN
             SET @breakOffset = CHARINDEX(NCHAR(32), @revWindow);    -- Space
+        END;
 
         IF @breakOffset = 0
             -- No whitespace in the window: nothing to break on, so take the full 4000.
+        BEGIN
             SET @chunkLen = @maxChunk;
+        END
         ELSE
             -- Keep the break char at the tail of this chunk. Its position from the start of the
             -- chunk is (@maxChunk - @breakOffset + 1), since @breakOffset counts from the end.
+        BEGIN
             SET @chunkLen = @maxChunk - @breakOffset + 1;
+        END;
 
         PRINT SUBSTRING(@DebugMessage, @pos, @chunkLen);
         SET @pos = @pos + @chunkLen;

@@ -99,22 +99,25 @@ BEGIN
             END;
         END;
     END
-    ELSE IF @Debug = 1
+    ELSE
     BEGIN
-        PRINT N'Debug mode: the job-server assignment already exists; no change would be made.';
+        IF @Debug = 1
+        BEGIN
+            PRINT N'Debug mode: the job-server assignment already exists; no change would be made.';
 
-        SELECT
-            server_id,
-            server_name,
-            enlist_date,
-            last_poll_date
-        FROM #sysjobservers
-        WHERE server_name = @server_name
-           OR
-           (
-               @server_name IN (N'(LOCAL)', @local_server)
-               AND server_name = @local_server
-           );
+            SELECT
+                server_id,
+                server_name,
+                enlist_date,
+                last_poll_date
+            FROM #sysjobservers
+            WHERE server_name = @server_name
+               OR
+               (
+                   @server_name IN (N'(LOCAL)', @local_server)
+                   AND server_name = @local_server
+               );
+        END;
     END;
     
 END
