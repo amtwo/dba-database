@@ -48,7 +48,23 @@ DECLARE db_cur CURSOR LOCAL FAST_FORWARD FOR
     FROM sys.databases AS d
     WHERE d.state_desc = N'ONLINE'
       AND HAS_DBACCESS(d.name) = 1
-      AND dbo.AGDbRole_Get(d.name) = CASE WHEN d.replica_id IS NULL THEN N'ONLINE' ELSE N'PRIMARY' END
+      AND (d.replica_id IS NULL OR
+           CASE
+               -- The helper accepts AG names too and compares names case-insensitively.
+               WHEN EXISTS (
+                   SELECT 1
+                   FROM sys.availability_groups AS ag
+                   WHERE ag.name COLLATE SQL_Latin1_General_CP1_CI_AS = d.name COLLATE SQL_Latin1_General_CP1_CI_AS
+               ) OR EXISTS (
+                   SELECT 1
+                   FROM sys.databases AS otherDb
+                   WHERE otherDb.database_id <> d.database_id
+                     AND otherDb.name COLLATE SQL_Latin1_General_CP1_CI_AS = d.name COLLATE SQL_Latin1_General_CP1_CI_AS
+               )
+                   THEN sys.fn_hadr_is_primary_replica(d.name)
+               WHEN dbo.AGDbRole_Get(d.name) = N'PRIMARY' THEN 1
+               ELSE 0
+           END = 1)
       AND (@DbName IS NULL OR d.name = @DbName);
 
 DECLARE cmd_cur CURSOR LOCAL FAST_FORWARD FOR
