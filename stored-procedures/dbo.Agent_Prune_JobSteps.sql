@@ -27,6 +27,12 @@ BEGIN
 
     DECLARE @job_id UNIQUEIDENTIFIER = (SELECT job_id FROM msdb.dbo.sysjobs WHERE [name] = @job_name);
 
+    IF @job_id IS NULL OR @retain_step_number IS NULL OR @retain_step_number < 0
+    BEGIN
+        RAISERROR('Specify an existing job and a nonnegative step number.', 16, 1);
+        RETURN;
+    END;
+
     CREATE TABLE #sysjobsteps
     (
         step_id              INT,
@@ -58,22 +64,29 @@ BEGIN
     EXEC msdb.dbo.sp_help_jobstep @job_id = @job_id;
 
 
-    DECLARE @pruneSql NVARCHAR(MAX) = N'';
-    SELECT @pruneSql = @pruneSql
-            + N'EXEC msdb.dbo.sp_delete_jobstep @job_id = @jid, @step_id = ' + CONVERT(nvarchar(max),js.step_id) + N';'
+    DECLARE @pruneSql nvarchar(max) = (
+        SELECT N'EXEC @ReturnCode = msdb.dbo.sp_delete_jobstep @job_id = @jid, @step_id = '
+            + CONVERT(nvarchar(12), js.step_id) + N';'
+            + N' IF @ReturnCode <> 0 THROW 50000, ''SQL Agent job-step deletion failed.'', 1;'
             + NCHAR(13) + NCHAR(10)
-    FROM #sysjobsteps AS js
-    WHERE js.step_id > @retain_step_number;
+        FROM #sysjobsteps AS js
+        WHERE js.step_id > @retain_step_number
+        ORDER BY js.step_id DESC
+        FOR XML PATH(''), TYPE
+    ).value('.', 'nvarchar(max)');
 
     IF (@pruneSql <> N'')
     BEGIN
+        SET @pruneSql = N'DECLARE @ReturnCode int;' + NCHAR(13) + NCHAR(10) + @pruneSql;
         IF @Debug = 1
         BEGIN
             EXEC dbo.Debug_Print @DebugMessage = @pruneSql;
         END
         ELSE
-            EXEC sys.sp_executesql @pruneSql, N'@jid UNIQUEIDENTIFIER', @jid = @job_id;
-        END
+        BEGIN
+            EXEC sys.sp_executesql @pruneSql, N'@jid uniqueidentifier', @jid = @job_id;
+        END;
+    END;
 
 
 END
