@@ -9,13 +9,14 @@ CREATED: 20210627
     View to get basic info for server-level permissions, simplifying/flattening DMVs, to make applying additional 
     criteria/filters from automation & troubleshooting easier.
     CanLogIn indicates an enabled login with a visible, explicit CONNECT SQL grant.
-    PermissionSql scripts catalog entries and is NULL when the securable cannot be resolved.
+    PermissionSql scripts server, login, server role, and endpoint permissions. Run the commands in master.
+    Other securable classes or entries with hidden targets return NULL in PermissionSql.
 EXAMPLES:
 * Get GRANT/DENY commands for permissions on all enabled users
     SELECT p.LoginName, p.PermissionSql
     FROM dbo.ServerLoginPermissions AS p
     JOIN dbo.ServerLogins AS l ON l.LoginSid = p.LoginSid
-    WHERE l.IsEnabled = 1;
+    WHERE l.IsEnabled = 1 AND p.PermissionSql IS NOT NULL;
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE

@@ -10,7 +10,7 @@ CREATED: 20210627
     criteria/filters from automation & troubleshooting easier.
     CanLogIn indicates an enabled login with a visible, explicit CONNECT SQL grant.
 EXAMPLES:
-* All logins that can log in (enabled + have CONNECT SQL), modified in the last 7 days:
+* Enabled logins with a visible, explicit CONNECT SQL grant, modified in the last 7 days:
     SELECT LoginName, DateModified, CreateSql
     FROM dbo.ServerLogins
     WHERE CanLogIn = 1
