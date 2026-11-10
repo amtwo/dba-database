@@ -1,11 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.AgentJob_Status'))
-BEGIN
-    EXEC ('CREATE FUNCTION dbo.AgentJob_Status() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' );
-END;
-GO
-
-
-ALTER FUNCTION dbo.AgentJob_Status (@JobName sysname)
+CREATE OR ALTER FUNCTION dbo.AgentJob_Status (@JobName sysname)
 RETURNS TABLE
 /*************************************************************************************************
 AUTHOR: Andy Mallon
