@@ -1,4 +1,5 @@
 CREATE OR ALTER VIEW dbo.ServerProperties
+AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 CREATED: 2021130
@@ -17,7 +18,6 @@ CREATED: 2021130
     https://github.com/amtwo/dba-database/blob/main/LICENSE
     ©2014-2022 ● Andy Mallon ● am2.co
 *************************************************************************************************/
-AS
 SELECT 
         PropertyName,
         PropertyValue       = CONVERT(nvarchar(128), PropertyValue),

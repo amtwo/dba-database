@@ -1,3 +1,5 @@
+CREATE OR ALTER VIEW dbo.TimeZoneDetailed
+AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 **************************************************************************************************
@@ -5,8 +7,6 @@ AUTHOR: Andy Mallon
     https://github.com/amtwo/dba-database/blob/master/LICENSE
     ©2014-2020 ● Andy Mallon ● am2.co
 *************************************************************************************************/
-CREATE OR ALTER VIEW dbo.TimeZoneDetailed
-AS
 SELECT tz.TimeZoneId,
        tz.DisplayName,
        tz.StandardName,

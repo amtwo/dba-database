@@ -1,4 +1,5 @@
 CREATE OR ALTER VIEW dbo.DatabaseProperties
+AS
 /*************************************************************************************************
 AUTHOR: Andy Mallon
 CREATED: 2021130
@@ -18,7 +19,6 @@ CREATED: 2021130
     https://github.com/amtwo/dba-database/blob/main/LICENSE
     ©2014-2022 ● Andy Mallon ● am2.co
 *************************************************************************************************/
-AS
 WITH DbProperties AS (
     SELECT *
     FROM (
