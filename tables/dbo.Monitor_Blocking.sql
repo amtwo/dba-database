@@ -34,31 +34,45 @@ END
 GO
 
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'AlertId')
+BEGIN
     ALTER TABLE dbo.Monitor_Blocking ADD AlertId uniqueidentifier NULL;
+END;
 GO
 
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'AlertRecipients')
+BEGIN
     ALTER TABLE dbo.Monitor_Blocking ADD AlertRecipients varchar(max) NULL;
+END;
 GO
 
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailAttemptDateTime')
+BEGIN
     ALTER TABLE dbo.Monitor_Blocking ADD EmailAttemptDateTime datetime2(3) NULL;
+END;
 GO
 
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailQueuedDateTime')
+BEGIN
     ALTER TABLE dbo.Monitor_Blocking ADD EmailQueuedDateTime datetime2(3) NULL;
+END;
 GO
 
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailStatus')
+BEGIN
     ALTER TABLE dbo.Monitor_Blocking ADD EmailStatus varchar(16) NULL;
+END;
 GO
 
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'DatabaseMailItemId')
+BEGIN
     ALTER TABLE dbo.Monitor_Blocking ADD DatabaseMailItemId int NULL;
+END;
 GO
 
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = object_id('dbo.Monitor_Blocking') AND name = 'EmailError')
+BEGIN
     ALTER TABLE dbo.Monitor_Blocking ADD EmailError nvarchar(4000) NULL;
+END;
 GO
 
 IF NOT EXISTS (
@@ -67,9 +81,11 @@ IF NOT EXISTS (
     WHERE object_id = OBJECT_ID('dbo.Monitor_Blocking')
     AND name = 'IX_Monitor_Blocking_EmailAttemptDateTime_Sending'
 )
+BEGIN
     CREATE NONCLUSTERED INDEX IX_Monitor_Blocking_EmailAttemptDateTime_Sending
         ON dbo.Monitor_Blocking (EmailAttemptDateTime)
         WHERE EmailStatus = 'sending';
+END;
 GO
 
 IF NOT EXISTS (
@@ -78,9 +94,11 @@ IF NOT EXISTS (
     WHERE object_id = OBJECT_ID('dbo.Monitor_Blocking')
     AND name = 'IX_Monitor_Blocking_EmailQueuedDateTime_Queued'
 )
+BEGIN
     CREATE NONCLUSTERED INDEX IX_Monitor_Blocking_EmailQueuedDateTime_Queued
         ON dbo.Monitor_Blocking (EmailQueuedDateTime)
         WHERE EmailStatus = 'queued';
+END;
 GO
 
 
