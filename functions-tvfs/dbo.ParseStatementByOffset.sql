@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.ParseStatementByOffset'))
-    EXEC ('CREATE FUNCTION dbo.ParseStatementByOffset() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' )
-GO
-
-
-ALTER FUNCTION dbo.ParseStatementByOffset (
+CREATE OR ALTER FUNCTION dbo.ParseStatementByOffset (
     @SqlHandle      varbinary(64),
     @StartOffset int,
     @EndOffset   int

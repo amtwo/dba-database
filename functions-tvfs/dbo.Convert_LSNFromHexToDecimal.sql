@@ -1,9 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.Convert_LSNFromHexToDecimal'))
-    EXEC ('CREATE FUNCTION dbo.Convert_LSNFromHexToDecimal() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' )
-GO
-
-
-ALTER FUNCTION dbo.Convert_LSNFromHexToDecimal (@LSN varchar(22))
+CREATE OR ALTER FUNCTION dbo.Convert_LSNFromHexToDecimal (@LSN varchar(22))
 RETURNS TABLE
 /*************************************************************************************************
 AUTHOR: Andy Mallon

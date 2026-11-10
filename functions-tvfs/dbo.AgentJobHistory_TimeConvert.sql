@@ -1,8 +1,4 @@
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE type = 'IF' AND object_id = object_id('dbo.AgentJobHistory_TimeConvert'))
-    EXEC ('CREATE FUNCTION dbo.AgentJobHistory_TimeConvert() RETURNS TABLE AS RETURN SELECT Result = ''This is a stub'';' )
-GO
-
-ALTER FUNCTION dbo.AgentJobHistory_TimeConvert (@Date int, @Time int, @Duration int)
+CREATE OR ALTER FUNCTION dbo.AgentJobHistory_TimeConvert (@Date int, @Time int, @Duration int)
 RETURNS TABLE
 /*************************************************************************************************
 AUTHOR: Andy Mallon
