@@ -261,9 +261,11 @@ BEGIN
 
     -- Guard the read so a server without dbo.Config still runs on the built-in fallbacks.
     IF OBJECT_ID(N'dbo.Config', N'U') IS NOT NULL
+    BEGIN
         INSERT INTO @cfg (ConfigCode, NumericValue, UnicodeValue)
         SELECT ConfigCode, NumericValue, UnicodeValue
         FROM dbo.Config_Get(N'StatisticsMaint', NULL);
+    END;
 
     SET @MediumRowCountThreshold    = COALESCE(@MediumRowCountThreshold,    (SELECT NumericValue FROM @cfg WHERE ConfigCode = 'STATMEDROWS'), 1000000);
     SET @LargeRowCountThreshold     = COALESCE(@LargeRowCountThreshold,     (SELECT NumericValue FROM @cfg WHERE ConfigCode = 'STATLRGROWS'), 100000000);
@@ -469,7 +471,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM #Worklist)
     BEGIN
         IF @Debug = 1
+        BEGIN
             EXEC dbo.Debug_Print @DebugMessage = N'No user tables with statistics found in the target database. Nothing to do.';
+        END;
         RETURN;
     END;
 
@@ -661,7 +665,9 @@ BEGIN
           );';
 
         IF @Debug = 1
+        BEGIN
             EXEC dbo.Debug_Print @DebugMessage = @skewSql;
+        END;
 
         EXEC @dbExec
             @stmt = @skewSql,
@@ -731,9 +737,13 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         IF @Debug = 1
+        BEGIN
             SET @debugAutoStats += N'EXEC ' + @autoStatsProc + N' N''' + @tableArg + N''', ''OFF'';' + NCHAR(13) + NCHAR(10);
+        END
         ELSE
-            EXEC @autoStatsProc @tableArg, 'OFF';   -- positional (@tblname, @flagc), per the documented form
+        BEGIN
+            EXEC @autoStatsProc @tableArg, 'OFF';
+        END;   -- positional (@tblname, @flagc), per the documented form
 
         FETCH NEXT FROM lock_cursor INTO @tableArg;
     END;
@@ -742,7 +752,9 @@ BEGIN
     DEALLOCATE lock_cursor;
 
     IF @Debug = 1 AND LEN(@debugAutoStats) > 0
+    BEGIN
         EXEC dbo.Debug_Print @DebugMessage = @debugAutoStats;
+    END;
 
     -------------------------------------------------------------------------------------------
     -- Step 1b: UN-lock auto-stats (sys.sp_autostats @flagc = 'ON') on excluded tables that we
@@ -772,9 +784,13 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         IF @Debug = 1
+        BEGIN
             SET @debugUnlock += N'EXEC ' + @autoStatsProc + N' N''' + @tableArg + N''', ''ON'';' + NCHAR(13) + NCHAR(10);
+        END
         ELSE
-            EXEC @autoStatsProc @tableArg, 'ON';    -- positional (@tblname, @flagc); hand it back to auto-stats
+        BEGIN
+            EXEC @autoStatsProc @tableArg, 'ON';
+        END;    -- positional (@tblname, @flagc); hand it back to auto-stats
 
         FETCH NEXT FROM unlock_cursor INTO @tableArg;
     END;
@@ -783,7 +799,9 @@ BEGIN
     DEALLOCATE unlock_cursor;
 
     IF @Debug = 1 AND LEN(@debugUnlock) > 0
+    BEGIN
         EXEC dbo.Debug_Print @DebugMessage = @debugUnlock;
+    END;
 
     -------------------------------------------------------------------------------------------
     -- Step 2: assemble the IndexOptimize passes. @Indexes tokens are built with QUOTENAME on each
@@ -902,7 +920,9 @@ BEGIN
             @maxPass int = (SELECT ISNULL(MAX(PassId), 0) FROM @Passes);
 
     IF @Debug = 1 AND @maxPass = 0
+    BEGIN
         EXEC dbo.Debug_Print @DebugMessage = N'No statistics passes to run for the given parameters.';
+    END;
 
     WHILE @i <= @maxPass
     BEGIN

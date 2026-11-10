@@ -52,11 +52,13 @@ EXEC sys.sp_addsubscription
     @subscriber_type = 0;';
 
 IF @Debug = 0
+BEGIN
     EXEC sys.sp_executesql @sql,
         N'@PublicationName nvarchar(256), @Subscriber nvarchar(256), @SubscriberDbName nvarchar(256)',
         @PublicationName = @PublicationName,
         @Subscriber = @Subscriber,
         @SubscriberDbName = @SubscriberDbName;
+END
 ELSE
 BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
@@ -88,11 +90,13 @@ EXEC sys.sp_addpushsubscription_agent
     @dts_package_location = N''Distributor'';';
 
 IF @Debug = 0
+BEGIN
     EXEC sys.sp_executesql @sql,
         N'@PublicationName nvarchar(256), @Subscriber nvarchar(256), @SubscriberDbName nvarchar(256)',
         @PublicationName = @PublicationName,
         @Subscriber = @Subscriber,
         @SubscriberDbName = @SubscriberDbName;
+END
 ELSE
 BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;

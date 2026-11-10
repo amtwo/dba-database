@@ -104,7 +104,9 @@ WHILE @ChunkID <= @MaxID
             END;
 
         IF @ChunkEndID = @MaxID
+        BEGIN
             BREAK;
+        END;
 
         SELECT @ChunkID = @ChunkEndID + 1;
     END;

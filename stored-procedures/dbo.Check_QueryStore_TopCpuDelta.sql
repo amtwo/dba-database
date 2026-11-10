@@ -38,7 +38,9 @@ BEGIN
 END;';
 
     IF @Debug = 1
+    BEGIN
         EXEC dbo.Debug_Print @DebugMessage = @Command;
+    END;
 
     EXEC dbo.sp_ineachdb
         @command         = @Command,
@@ -56,5 +58,7 @@ IF EXISTS (
     WHERE name = N'Check_QueryStoreRegressedQueries'
       AND schema_id = SCHEMA_ID(N'dbo')
 )
+BEGIN
     DROP SYNONYM dbo.Check_QueryStoreRegressedQueries;
+END;
 GO

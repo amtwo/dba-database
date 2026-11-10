@@ -278,10 +278,14 @@ BEGIN
     -- Stitch the batch together. DETAIL and ROLLUP both contribute under ALL; each statement
     -- is self-terminated with a semicolon, so they run back-to-back as two result sets.
     IF @Mode IN ('DETAIL', 'ALL')
+    BEGIN
         SET @sql += @detailSql;
+    END;
 
     IF @Mode IN ('ROLLUP', 'ALL')
+    BEGIN
         SET @sql += @rollupSql;
+    END;
 
     -- Debug: dump the assembled SQL and bail. @sql routinely blows past PRINT's 4000-char limit,
     -- so hand it to dbo.Debug_Print, which chunks it on whitespace boundaries for readability.

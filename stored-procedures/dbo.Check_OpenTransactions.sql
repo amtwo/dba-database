@@ -188,7 +188,9 @@ FROM #OpenTrans t;
 
 --output results in debug mode:
     IF NOT EXISTS (SELECT 1 FROM #OpenTrans)
+    BEGIN
         SELECT 'No Open Transactions longer than ' + CAST(@DurationThreshold AS varchar(10)) + ' minutes exist' AS OpenTransactions;
+    END
     ELSE
     BEGIN
         SELECT * FROM #OpenTrans;

@@ -33,7 +33,9 @@ BEGIN
 END;';
 
     IF @Debug = 1
+    BEGIN
         EXEC dbo.Debug_Print @DebugMessage = @Command;
+    END;
 
     EXEC dbo.sp_ineachdb
         @command         = @Command,

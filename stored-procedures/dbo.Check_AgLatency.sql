@@ -167,8 +167,11 @@ JOIN #AgStatus AS primaryStatus ON primaryStatus.AgName = r.AgName AND primarySt
 -- Do filtering on the results here, rather than up above. 
 -- There's not much data here, so no perf advantage to doing it sooner.
     IF NOT EXISTS (SELECT 1 FROM #Results AS r)
+    BEGIN
         SELECT 'No AGs Exist' AS AgStatus;
+    END
     ELSE
+    BEGIN
         SELECT r.*
         FROM #Results AS r
         WHERE (r.UnsentLogKb IS NULL OR r.UnsentLogKb >= @Threshold)
@@ -184,4 +187,5 @@ JOIN #AgStatus AS primaryStatus ON primaryStatus.AgName = r.AgName AND primarySt
                             THEN r.DbName
                       END
         ORDER BY r.SortOrder, r.UnsentLogKb DESC, r.ServerName, r.DbName;
+    END;
 GO

@@ -109,7 +109,9 @@ OUTER APPLY (
 ORDER BY t.LogicalIoPages DESC;';
 
 IF @Debug = 1
+BEGIN
     PRINT @Sql;
+END;
 
 DECLARE @PreviousLockTimeout int = @@LOCK_TIMEOUT;
 DECLARE @RestoreLockTimeout nvarchar(50) = N'SET LOCK_TIMEOUT ' + CONVERT(nvarchar(12), @PreviousLockTimeout);

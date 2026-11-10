@@ -290,47 +290,56 @@ BEGIN
         FROM #Blocked b
         WHERE b.ID = @BlockedRowId;
     END;
-    ELSE IF @ResourceType = 'OBJECT'
+    ELSE
     BEGIN
-        UPDATE b
-        SET WaitDescription = COALESCE('OBJECT WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName, @WaitResource)
-        FROM #Blocked b
-        WHERE b.ID = @BlockedRowId;
-    END;
-    ELSE IF @ResourceType = 'TAB'
-    BEGIN
-        SET @Sql = N'SELECT @IndexName = i.name FROM ' + QUOTENAME(@DbName) +
-            N'.sys.indexes i WHERE i.object_id = @ObjectId AND i.index_id = @IndexId';
-        EXEC sys.sp_executesql @Sql,
-            N'@ObjectId int, @IndexId int, @IndexName nvarchar(256) OUTPUT',
-            @ObjectId = @ObjectId, @IndexId = @IndexId, @IndexName = @IndexName OUTPUT;
-
-        UPDATE b
-        SET WaitDescription = COALESCE('TAB WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName +
-            CASE WHEN @IndexId IS NULL OR @IndexId = 0 THEN ''
-                 WHEN @IndexName IS NOT NULL THEN ' (Index: ' + @IndexName + ')'
-                 ELSE ' (Index ID: ' + CONVERT(varchar(11), @IndexId) + ')'
-            END, @WaitResource)
-        FROM #Blocked b
-        WHERE b.ID = @BlockedRowId;
-    END;
-    ELSE IF @ResourceType IN ('PAGE', 'RID')
-    BEGIN
-        IF @ResourceType = 'RID'
+        IF @ResourceType = 'OBJECT'
         BEGIN
             UPDATE b
-            SET WaitDescription = COALESCE('ROW WAIT: ' + @DbName + ' File: ' + @FileName +
-                ' Page_id/Slot: ' + CONVERT(varchar(20), @PageId) + ':' + CONVERT(varchar(11), @SlotId), @WaitResource)
+            SET WaitDescription = COALESCE('OBJECT WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName, @WaitResource)
             FROM #Blocked b
             WHERE b.ID = @BlockedRowId;
         END;
         ELSE
         BEGIN
-            UPDATE b
-            SET WaitDescription = COALESCE('PAGE WAIT: ' + @DbName + ' File: ' + @FileName +
-                ' Page_id: ' + CONVERT(varchar(20), @PageId), @WaitResource)
-            FROM #Blocked b
-            WHERE b.ID = @BlockedRowId;
+            IF @ResourceType = 'TAB'
+            BEGIN
+                SET @Sql = N'SELECT @IndexName = i.name FROM ' + QUOTENAME(@DbName) +
+                    N'.sys.indexes i WHERE i.object_id = @ObjectId AND i.index_id = @IndexId';
+                EXEC sys.sp_executesql @Sql,
+                    N'@ObjectId int, @IndexId int, @IndexName nvarchar(256) OUTPUT',
+                    @ObjectId = @ObjectId, @IndexId = @IndexId, @IndexName = @IndexName OUTPUT;
+
+                UPDATE b
+                SET WaitDescription = COALESCE('TAB WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName +
+                    CASE WHEN @IndexId IS NULL OR @IndexId = 0 THEN ''
+                         WHEN @IndexName IS NOT NULL THEN ' (Index: ' + @IndexName + ')'
+                         ELSE ' (Index ID: ' + CONVERT(varchar(11), @IndexId) + ')'
+                    END, @WaitResource)
+                FROM #Blocked b
+                WHERE b.ID = @BlockedRowId;
+            END;
+            ELSE
+            BEGIN
+                IF @ResourceType IN ('PAGE', 'RID')
+                BEGIN
+                    IF @ResourceType = 'RID'
+                    BEGIN
+                        UPDATE b
+                        SET WaitDescription = COALESCE('ROW WAIT: ' + @DbName + ' File: ' + @FileName +
+                            ' Page_id/Slot: ' + CONVERT(varchar(20), @PageId) + ':' + CONVERT(varchar(11), @SlotId), @WaitResource)
+                        FROM #Blocked b
+                        WHERE b.ID = @BlockedRowId;
+                    END;
+                    ELSE
+                    BEGIN
+                        UPDATE b
+                        SET WaitDescription = COALESCE('PAGE WAIT: ' + @DbName + ' File: ' + @FileName +
+                            ' Page_id: ' + CONVERT(varchar(20), @PageId), @WaitResource)
+                        FROM #Blocked b
+                        WHERE b.ID = @BlockedRowId;
+                    END;
+                END;
+            END;
         END;
     END;
 
@@ -441,7 +450,9 @@ FROM #Blocked b;
 IF @Debug = 1
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM #LeadingBlocker UNION SELECT 1 FROM #Blocked)
+    BEGIN
         SELECT 'No Blocking Detected' AS Blocking;
+    END
     ELSE
     BEGIN
         SELECT * FROM #LeadingBlocker 
@@ -551,7 +562,9 @@ BEGIN
 
         -- Another execution is already checking the throttle or creating its sending claim.
         IF @ApplicationLockResult = -1
+        BEGIN
             RETURN (0);
+        END;
 
         IF @ApplicationLockResult < 0
         BEGIN
@@ -593,7 +606,9 @@ BEGIN
                     @LockOwner = 'Session';
 
                 IF @ApplicationLockReleaseResult < 0
+                BEGIN
                     RAISERROR('Could not release the blocking-alert application lock (return code %d).',16,1,@ApplicationLockReleaseResult);
+                END;
 
                 SET @ApplicationLockHeld = 0;
                 RETURN (0);
@@ -616,7 +631,9 @@ BEGIN
                 @LockOwner = 'Session';
 
             IF @ApplicationLockReleaseResult < 0
+            BEGIN
                 RAISERROR('Could not release the blocking-alert application lock (return code %d).',16,1,@ApplicationLockReleaseResult);
+            END;
 
             SET @ApplicationLockHeld = 0;
 
@@ -636,7 +653,9 @@ BEGIN
             END;
 
             IF @DatabaseMailItemId IS NULL
+            BEGIN
                 RAISERROR('Database Mail returned success without a mail item ID.',16,1);
+            END;
 
             SET @EmailQueuedDateTime = SYSDATETIME();
 

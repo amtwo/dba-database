@@ -63,7 +63,9 @@ IF (@OrderBy IS NULL
     OR EXISTS (SELECT 1 FROM STRING_SPLIT(REPLACE(REPLACE(@OrderBy,'ASC',''),'DESC',''), N',')
             WHERE LTRIM(RTRIM(value)) NOT IN (SELECT name FROM tempdb.sys.columns WHERE object_id = object_id('tempdb..#FileSizeInfo'))
         ))
+BEGIN
     SET @OrderBy = 'ServerName, DbName, LogicalFileName';
+END;
 
 IF @DbName IS NULL
 BEGIN
@@ -111,17 +113,25 @@ SET @sql = N'SELECT * FROM  #FileSizeInfo WHERE 1=1';
 
 --Include optional filters
 IF @IncludeDataFiles = 0
+BEGIN
     SET @sql = @sql + N' AND FileType <> ''ROWS''';
+END;
 IF @IncludeLogFiles = 0
+BEGIN
     SET @sql = @sql + N' AND FileType <> ''LOG''';
+END;
 IF @Drive IS NOT NULL
+BEGIN
     SET @sql = @sql + N' AND PhysicalFileName LIKE ''' + @Drive + N'%''';
+END;
 
 --include order by
 SET @sql = @sql + N' ORDER BY ' + @OrderBy;
 
 IF @Debug = 1
+BEGIN
     EXEC dbo.Debug_Print @DebugMessage = @sql;
+END;
 
 EXEC sys.sp_executesql @sql;
 

@@ -67,7 +67,7 @@ BEGIN
     DECLARE @pruneSql nvarchar(max) = (
         SELECT N'EXEC @ReturnCode = msdb.dbo.sp_delete_jobstep @job_id = @jid, @step_id = '
             + CONVERT(nvarchar(12), js.step_id) + N';'
-            + N' IF @ReturnCode <> 0 THROW 50000, ''SQL Agent job-step deletion failed.'', 1;'
+            + N' IF @ReturnCode <> 0 BEGIN THROW 50000, ''SQL Agent job-step deletion failed.'', 1; END;'
             + NCHAR(13) + NCHAR(10)
         FROM #sysjobsteps AS js
         WHERE js.step_id > @retain_step_number

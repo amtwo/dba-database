@@ -58,7 +58,9 @@ SET NOCOUNT ON
     IF (object_id('tempdb..#tables') IS NULL)
     BEGIN
         IF @object_name IS NULL
+        BEGIN
             RAISERROR ('No table(s) provided.',16,1)
+        END;
         CREATE TABLE #tables (DbName sysname, SchemaName sysname, TableName sysname, ObjType char(2) CONSTRAINT pk_tables PRIMARY KEY (DbName, SchemaName, TableName))
         INSERT INTO #tables (DbName, SchemaName, TableName)
         SELECT COALESCE(parsename(@object_name,3),db_name()),
@@ -162,11 +164,13 @@ SET NOCOUNT ON
                         @SchemaName = @SchemaName;
                 END 
                 
-                ELSE IF (@ObjType <> 'U')
+                ELSE
                 BEGIN
-                    --Its not a table. Delete the current row & replace with object(s) it references
-                    SET @ObjectName = QUOTENAME(@SchemaName) + N'.' + QUOTENAME(@TableName);
-                    SET @sql = N'USE ' + @QuotedDbName + N';
+                    IF (@ObjType <> 'U')
+                    BEGIN
+                        --Its not a table. Delete the current row & replace with object(s) it references
+                        SET @ObjectName = QUOTENAME(@SchemaName) + N'.' + QUOTENAME(@TableName);
+                        SET @sql = N'USE ' + @QuotedDbName + N';
                         INSERT INTO #tables (DbName, SchemaName, TableName)
                         SELECT DISTINCT
                             COALESCE(referenced_database_name, @DbName),
@@ -180,26 +184,27 @@ SET NOCOUNT ON
                                 AND t.SchemaName COLLATE DATABASE_DEFAULT = COALESCE(r.referenced_schema_name, @SchemaName) COLLATE DATABASE_DEFAULT
                                 AND t.TableName COLLATE DATABASE_DEFAULT = r.referenced_entity_name COLLATE DATABASE_DEFAULT
                         );';
-                    IF @debug = 1
-                    BEGIN
-                        EXEC dbo.Debug_Print @DebugMessage = @sql;
-                        PRINT N'    @DbName: ' + @DbName;
-                        PRINT N'    @SchemaName: ' + @SchemaName;
-                        PRINT N'    @TableName: ' + @TableName;
-                        PRINT N'    @ObjectName: ' + @ObjectName;
-                        CLOSE tab_cur;
-                        DEALLOCATE tab_cur;
-                        CLOSE db_cur;
-                        DEALLOCATE db_cur;
-                        RETURN;
+                        IF @debug = 1
+                        BEGIN
+                            EXEC dbo.Debug_Print @DebugMessage = @sql;
+                            PRINT N'    @DbName: ' + @DbName;
+                            PRINT N'    @SchemaName: ' + @SchemaName;
+                            PRINT N'    @TableName: ' + @TableName;
+                            PRINT N'    @ObjectName: ' + @ObjectName;
+                            CLOSE tab_cur;
+                            DEALLOCATE tab_cur;
+                            CLOSE db_cur;
+                            DEALLOCATE db_cur;
+                            RETURN;
+                        END
+                        DELETE #tables WHERE DbName = @DbName AND SchemaName = @SchemaName AND TableName = @TableName;
+                        EXEC sys.sp_executesql @sql,
+                            N'@DbName sysname, @SchemaName sysname, @ObjectName nvarchar(517)',
+                            @DbName = @DbName,
+                            @SchemaName = @SchemaName,
+                            @ObjectName = @ObjectName;
                     END
-                    DELETE #tables WHERE DbName = @DbName AND SchemaName = @SchemaName AND TableName = @TableName;
-                    EXEC sys.sp_executesql @sql,
-                        N'@DbName sysname, @SchemaName sysname, @ObjectName nvarchar(517)',
-                        @DbName = @DbName,
-                        @SchemaName = @SchemaName,
-                        @ObjectName = @ObjectName;
-                END
+                END;
                 FETCH NEXT FROM tab_cur INTO @SchemaName, @TableName, @ObjType
             END
 
@@ -212,7 +217,9 @@ SET NOCOUNT ON
     END
 
     IF (@object_name IS NOT NULL)
+    BEGIN
         SELECT DbName, SchemaName, TableName FROM #tables
+    END;
 
     GO
 
