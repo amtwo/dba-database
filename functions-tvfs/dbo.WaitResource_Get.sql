@@ -7,8 +7,9 @@ RETURNS TABLE
 AUTHOR: Andy Mallon
 CREATED: 20261101
     Parses supported SQL Server wait-resource strings into their database and resource identifiers.
-    Object names are resolved with SQL Server metadata functions; index names and HoBT lookups that
-    require cross-database catalog queries are resolved by the calling procedure.
+    It doesn't resolve names. Metadata functions such as OBJECT_NAME() ignore READ UNCOMMITTED and
+    wait behind the Sch-M lock a blocking report is trying to describe, so callers resolve schema,
+    object, and index names from the target database's catalog views with a short lock timeout.
 
 PARAMETERS
 * @WaitResource - Wait resource from sys.dm_exec_requests.
@@ -20,6 +21,8 @@ SELECT * FROM dbo.WaitResource_Get(N'PAGE: 5:1:104');
 
 **************************************************************************************************
 MODIFICATIONS:
+    20261120 - AM2 - Removed SchemaName and ObjectName. Their metadata functions waited behind
+                     Sch-M blockers; callers now resolve names themselves.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -105,8 +108,6 @@ RETURN
         DatabaseId,
         DatabaseName = DB_NAME(DatabaseId),
         ObjectId,
-        SchemaName = OBJECT_SCHEMA_NAME(ObjectId, DatabaseId),
-        ObjectName = OBJECT_NAME(ObjectId, DatabaseId),
         IndexId,
         HobtId,
         FileId,

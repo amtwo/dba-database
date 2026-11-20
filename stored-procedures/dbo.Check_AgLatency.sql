@@ -125,7 +125,8 @@ SELECT @@SERVERNAME,
         LTRIM(RTRIM(pc.instance_name)) as DbName,
         pc.cntr_value AS UnsentLogKb
 FROM sys.[dm_os_performance_counters] AS pc
-WHERE pc.object_name LIKE N'%:Database Replica'
+-- object_name is a blank-padded nchar(128), and trailing blanks count in a Unicode LIKE.
+WHERE RTRIM(pc.object_name) LIKE N'%:Database Replica'
 AND pc.counter_name  = 'Log Send Queue';
 
 INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason, 
@@ -166,7 +167,8 @@ JOIN #AgStatus AS primaryStatus ON primaryStatus.AgName = r.AgName AND primarySt
 --Output results
 -- Do filtering on the results here, rather than up above. 
 -- There's not much data here, so no perf advantage to doing it sooner.
-    IF NOT EXISTS (SELECT 1 FROM #Results AS r)
+    -- Check #AgStatus, not #Results: perfmon still reports a Database Replica _Total row with no AGs.
+    IF NOT EXISTS (SELECT 1 FROM #AgStatus)
     BEGIN
         SELECT 'No AGs Exist' AS AgStatus;
     END
@@ -182,6 +184,7 @@ JOIN #AgStatus AS primaryStatus ON primaryStatus.AgName = r.AgName AND primarySt
                             THEN r.DbName
                         WHEN EXISTS (SELECT 1 FROM #Results AS peer
                                     WHERE (peer.AgHealth <> 'HEALTHY' OR peer.UnsentLogKb IS NULL)
+                                    AND peer.DbName <> N'_Total'
                                     AND peer.AgName = r.AgName
                                     AND peer.DbName = r.DbName)
                             THEN r.DbName

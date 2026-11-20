@@ -260,7 +260,7 @@ WHERE jobId.JobIdHex IS NOT NULL;
 -- Keep each description tied to its blocked row; one session may have multiple wait resources.
 DECLARE wait_cur CURSOR LOCAL FAST_FORWARD FOR
     SELECT b.ID, b.WaitingSpid, resource.RawResource, resource.ResourceType, resource.DatabaseName,
-           resource.ObjectId, resource.SchemaName, resource.ObjectName, resource.IndexId, resource.HobtId,
+           resource.ObjectId, resource.IndexId, resource.HobtId,
            resource.FileId, resource.FileName, resource.PageId, resource.SlotId
     FROM #Blocked b
     CROSS APPLY dbo.WaitResource_Get(b.WaitResource) resource
@@ -268,25 +268,46 @@ DECLARE wait_cur CURSOR LOCAL FAST_FORWARD FOR
 
 OPEN wait_cur;
 FETCH NEXT FROM wait_cur INTO @BlockedRowId, @Spid, @WaitResource, @ResourceType, @DbName,
-    @ObjectId, @SchemaName, @ObjectName, @IndexId, @HobtId, @FileId, @FileName, @PageId, @SlotId;
+    @ObjectId, @IndexId, @HobtId, @FileId, @FileName, @PageId, @SlotId;
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    SET @IndexName = NULL;
+    SELECT @SchemaName = NULL, @ObjectName = NULL, @IndexName = NULL;
+
+    -- Resolve names from the target database's catalog views. Metadata functions such as OBJECT_NAME()
+    -- ignore READ UNCOMMITTED and wait behind the Sch-M lock being reported. The catalog views skip that
+    -- wait only for sysadmin and db_owner; everyone else still checks metadata visibility under Sch-S, so
+    -- the lookup gives up after a second and the description falls back to the raw wait resource.
+    -- SET LOCK_TIMEOUT inside sp_executesql reverts when the batch ends, so the caller's setting is untouched.
+    IF @ResourceType IN ('KEY', 'OBJECT', 'TAB') AND @DbName IS NOT NULL
+    BEGIN
+        SET @Sql = N'SET LOCK_TIMEOUT 1000; ' +
+            N'SELECT @SchemaName = s.name, @ObjectName = o.name, @IndexName = i.name ' +
+            N'FROM ' + QUOTENAME(@DbName) + N'.sys.objects o ' +
+            N'JOIN ' + QUOTENAME(@DbName) + N'.sys.schemas s ON s.schema_id = o.schema_id ' +
+            CASE WHEN @ResourceType = 'KEY'
+                THEN N'JOIN ' + QUOTENAME(@DbName) + N'.sys.partitions p ON p.object_id = o.object_id ' +
+                     N'JOIN ' + QUOTENAME(@DbName) + N'.sys.indexes i ON i.object_id = p.object_id AND i.index_id = p.index_id ' +
+                     N'WHERE p.hobt_id = @HobtId;'
+                ELSE N'LEFT JOIN ' + QUOTENAME(@DbName) + N'.sys.indexes i ON i.object_id = o.object_id AND i.index_id = @IndexId ' +
+                     N'WHERE o.object_id = @ObjectId;'
+            END;
+
+        BEGIN TRY
+            EXEC sys.sp_executesql @Sql,
+                N'@ObjectId int, @IndexId int, @HobtId bigint, @SchemaName sysname OUTPUT, @ObjectName nvarchar(256) OUTPUT, @IndexName nvarchar(256) OUTPUT',
+                @ObjectId = @ObjectId, @IndexId = @IndexId, @HobtId = @HobtId,
+                @SchemaName = @SchemaName OUTPUT, @ObjectName = @ObjectName OUTPUT, @IndexName = @IndexName OUTPUT;
+        END TRY
+        BEGIN CATCH
+            -- Lock timeout, or the database is offline, restoring, or unreadable: report the raw wait resource.
+            SELECT @SchemaName = NULL, @ObjectName = NULL, @IndexName = NULL;
+        END CATCH;
+    END;
 
     IF @ResourceType = 'KEY'
     BEGIN
-        SET @ObjectName = NULL;
-        SET @Sql = N'SELECT @ObjectName = SCHEMA_NAME(o.schema_id) + N''.'' + o.name, @IndexName = i.name ' +
-            N'FROM ' + QUOTENAME(@DbName) + N'.sys.partitions p ' +
-            N'JOIN ' + QUOTENAME(@DbName) + N'.sys.objects o ON p.object_id = o.object_id ' +
-            N'JOIN ' + QUOTENAME(@DbName) + N'.sys.indexes i ON p.object_id = i.object_id AND p.index_id = i.index_id ' +
-            N'WHERE p.hobt_id = @HobtId';
-        EXEC sys.sp_executesql @Sql,
-            N'@HobtId bigint, @ObjectName nvarchar(256) OUTPUT, @IndexName nvarchar(256) OUTPUT',
-            @HobtId = @HobtId, @ObjectName = @ObjectName OUTPUT, @IndexName = @IndexName OUTPUT;
-
         UPDATE b
-        SET WaitDescription = COALESCE('KEY WAIT: ' + @DbName + '.' + @ObjectName + ' (' + COALESCE(@IndexName, '') + ')', @WaitResource)
+        SET WaitDescription = COALESCE('KEY WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName + ' (' + COALESCE(@IndexName, '') + ')', @WaitResource)
         FROM #Blocked b
         WHERE b.ID = @BlockedRowId;
     END;
@@ -303,12 +324,6 @@ BEGIN
         BEGIN
             IF @ResourceType = 'TAB'
             BEGIN
-                SET @Sql = N'SELECT @IndexName = i.name FROM ' + QUOTENAME(@DbName) +
-                    N'.sys.indexes i WHERE i.object_id = @ObjectId AND i.index_id = @IndexId';
-                EXEC sys.sp_executesql @Sql,
-                    N'@ObjectId int, @IndexId int, @IndexName nvarchar(256) OUTPUT',
-                    @ObjectId = @ObjectId, @IndexId = @IndexId, @IndexName = @IndexName OUTPUT;
-
                 UPDATE b
                 SET WaitDescription = COALESCE('TAB WAIT: ' + @DbName + '.' + @SchemaName + '.' + @ObjectName +
                     CASE WHEN @IndexId IS NULL OR @IndexId = 0 THEN ''
@@ -344,7 +359,7 @@ BEGIN
     END;
 
     FETCH NEXT FROM wait_cur INTO @BlockedRowId, @Spid, @WaitResource, @ResourceType, @DbName,
-        @ObjectId, @SchemaName, @ObjectName, @IndexId, @HobtId, @FileId, @FileName, @PageId, @SlotId;
+        @ObjectId, @IndexId, @HobtId, @FileId, @FileName, @PageId, @SlotId;
 END;
 CLOSE wait_cur;
 DEALLOCATE wait_cur;

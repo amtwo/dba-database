@@ -13,9 +13,9 @@ CREATED: 20220920
        Parameters allow you to optinally control a subset of replicas to modify the ROR list on.
        The read-only routing list can either be specified explicitly, or build dynamically based
         on a naming convention.
-        The explicit routing-list order is preserved with dbo.fn_split. Keep this dependency until
-        the repository no longer supports SQL Server 2019; STRING_SPLIT's optional ordinal argument
-        is available only starting with SQL Server 2022.
+        The explicit routing-list order is preserved by splitting it with OPENJSON, whose [key]
+        is the element position. STRING_SPLIT's ordinal argument would do the same, but it needs
+        SQL Server 2022.
        
        Note that the @RoutingListPattern and @RoutingListCSV parameters are mutually exclusive, 
        and you must supply exactly one of the two parameters. Supplying both or neither will
@@ -190,9 +190,10 @@ BEGIN
             STRING_AGG(CONVERT(nvarchar(max), N'N' + QUOTENAME(ror.replica_server_name, NCHAR(39))), N',') WITHIN GROUP (ORDER BY l.sort)
     FROM sys.availability_replicas AS ar
     JOIN sys.availability_replicas AS ror ON ror.group_id = ar.group_id
-    JOIN (SELECT Sort = csv.ID,
-                    ReplicaName = csv.Value
-            FROM dbo.fn_split(@RoutingListCSV,N',') AS csv) AS l ON l.ReplicaName = ror.replica_server_name
+    JOIN (SELECT Sort = CONVERT(int, csv.[key]),
+                    ReplicaName = LTRIM(RTRIM(csv.[value]))
+            FROM OPENJSON(N'["' + REPLACE(STRING_ESCAPE(@RoutingListCSV, 'json'), N',', N'","') + N'"]') AS csv) AS l
+        ON l.ReplicaName = ror.replica_server_name
     WHERE @RoutingListPattern IS NULL
     AND ar.replica_server_name LIKE @ModifyReplicaPattern
     AND ror.secondary_role_allow_connections IN (1,2)
