@@ -989,7 +989,10 @@ BEGIN
     END;
     ELSE
     BEGIN
+        -- ObjectId, not the names, is the identity here: these sysname columns take tempdb's collation,
+        -- which can be case-insensitive when the target database is case-sensitive (dbo.Foo vs dbo.foo).
         CREATE TABLE #PassStats (
+            ObjectId        int          NOT NULL,
             SchemaName      sysname      NOT NULL,
             ObjectName      sysname      NOT NULL,
             RowCount_Alloc  bigint       NOT NULL,
@@ -1004,8 +1007,9 @@ BEGIN
         -- Runs in @DbName's context so sys.stats resolves there; #Worklist/#PassStats are visible
         -- across the context switch. Same table filter as the named-table passes above.
         DECLARE @statsSql nvarchar(max) = N'
-        INSERT INTO #PassStats (SchemaName, ObjectName, RowCount_Alloc, IsNewlyLocked, Bucket, EffectiveSample, StatsId, StatsName, ModCounter)
+        INSERT INTO #PassStats (ObjectId, SchemaName, ObjectName, RowCount_Alloc, IsNewlyLocked, Bucket, EffectiveSample, StatsId, StatsName, ModCounter)
         SELECT
+            o.object_id,
             wl.SchemaName,
             wl.ObjectName,
             wl.RowCount_Alloc,
@@ -1041,12 +1045,11 @@ BEGIN
 
         -- Tables where per-statistic tokens would break Ola's comma split.
         CREATE TABLE #CommaTables (
-            SchemaName sysname NOT NULL,
-            ObjectName sysname NOT NULL
+            ObjectId int NOT NULL PRIMARY KEY
         );
 
-        INSERT INTO #CommaTables (SchemaName, ObjectName)
-        SELECT DISTINCT ps.SchemaName, ps.ObjectName
+        INSERT INTO #CommaTables (ObjectId)
+        SELECT DISTINCT ps.ObjectId
         FROM #PassStats AS ps
         WHERE ps.StatsName LIKE N'%,%';
 
@@ -1066,6 +1069,7 @@ BEGIN
                 SortRows      = CONVERT(bigint, 0),
                 SortSchema    = CONVERT(sysname, N''),
                 SortObject    = CONVERT(sysname, N''),
+                SortObjectId  = 0,
                 SortStatsId   = 0,
                 PassName      = p.PassName,
                 Bucket        = p.Bucket,
@@ -1082,6 +1086,7 @@ BEGIN
                 SortRows      = ps.RowCount_Alloc,
                 SortSchema    = ps.SchemaName,
                 SortObject    = ps.ObjectName,
+                SortObjectId  = ps.ObjectId,
                 SortStatsId   = ps.StatsId,
                 PassName      = p.PassName,
                 Bucket        = p.Bucket,
@@ -1097,11 +1102,7 @@ BEGIN
                 AND ps.EffectiveSample = p.SamplePercent
             WHERE p.IsSweep = 0
               AND (p.OnlyModified = 'N' OR ps.ModCounter IS NULL OR ps.ModCounter > 0)  -- keep NULLs: never drop a stat Ola would update
-              AND NOT EXISTS (
-                  SELECT 1 FROM #CommaTables AS ct
-                  WHERE ct.SchemaName = ps.SchemaName
-                    AND ct.ObjectName = ps.ObjectName
-              )
+              AND NOT EXISTS (SELECT 1 FROM #CommaTables AS ct WHERE ct.ObjectId = ps.ObjectId)
             UNION ALL
             -- Comma-named statistics: one table-level call for the whole table; Ola decides which stats to update.
             SELECT DISTINCT
@@ -1109,6 +1110,7 @@ BEGIN
                 SortRows      = ps.RowCount_Alloc,
                 SortSchema    = ps.SchemaName,
                 SortObject    = ps.ObjectName,
+                SortObjectId  = ps.ObjectId,        -- keeps case-distinct twins apart under DISTINCT
                 SortStatsId   = 0,
                 PassName      = p.PassName,
                 Bucket        = p.Bucket,
@@ -1123,11 +1125,10 @@ BEGIN
                 AND ps.Bucket = p.Bucket
                 AND ps.EffectiveSample = p.SamplePercent
             JOIN #CommaTables AS ct
-                ON ct.SchemaName = ps.SchemaName
-                AND ct.ObjectName = ps.ObjectName
+                ON ct.ObjectId = ps.ObjectId
             WHERE p.IsSweep = 0
         ) AS c
-        ORDER BY c.PassId, c.SortRows DESC, c.SortSchema, c.SortObject, c.SortStatsId;
+        ORDER BY c.PassId, c.SortRows DESC, c.SortSchema, c.SortObject, c.SortObjectId, c.SortStatsId;
     END;
 
     -------------------------------------------------------------------------------------------
