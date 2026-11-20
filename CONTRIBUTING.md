@@ -16,11 +16,36 @@ If you take one thing away: write it so the next person (often me, 18 months lat
 Quick heads-up on expectations: this is primarily *my* DBA toolbox (the README says as much). I'm happy to take contributions, but the bar is "would I run this on my own servers at 2am," so let's talk before you build.
 
 1. **Open an issue first.** Describe the bug or the thing you want to add before you write a pile of code. Saves us both the heartbreak of a PR I can't take. [File one here.](https://github.com/amtwo/dba-database/issues/new/choose)
-2. **Fork, then branch.** Do not work on `main` or `production` directly. Name the branch for what it does. Open pull requests against `main`; `production` is maintained as a compatibility mirror.
+2. **Fork, then branch.** Do not work on `main` or `production` directly. Name the branch for what it does, not for your employer's ticket (see [Keep private information out](#keep-private-information-out)). Open pull requests against `main`; `production` is maintained as a compatibility mirror.
 3. **Verify safely.** Do not run the installer against production or an instance containing data or objects you need to preserve. If runtime installation testing is needed and available, use a disposable or designated development instance, review the scripts and installer parameters first, and report the SQL Server version/edition and exact scope tested. Running an installer twice can help check repeatability, but do so only in that isolated environment. Before reporting that runtime validation is unavailable, check the [ARM64 SQL Edge smoke-testing option](#arm64-sql-edge-smoke-testing); a Docker image may be available even when no local SQL Server or `sqlcmd` is installed. If no suitable instance is available, say so; do not imply runtime validation was performed.
-4. **Open the PR.** [CODEOWNERS](CODEOWNERS) routes review to me automatically. Tell me what you tested it against (version, edition) in the description.
+4. **Open the PR.** [CODEOWNERS](CODEOWNERS) routes review to me automatically. Tell me what you tested it against (version, edition) in the description. Before you push, re-read the branch name, commit messages, and PR text for anything from the next section.
 
 There is no repository-wide automated test harness. Use the safest relevant checks available: review the diff, inspect dependencies and version requirements, and run static checks where available. Runtime behavior should be verified on an isolated development instance when one is available. Include a representative call and results for behavior changes; clearly label untested behavior and any environment limitations.
+
+### Keep private information out
+
+This repo is public, and so is everything attached to it. Don't put anything company-specific or personal in it. That covers code, comments, examples, test data, and object names, plus commit messages, branch names, issues, PRs, review comments, and any output you paste in.
+
+At best, that kind of detail means nothing to anyone outside your employer. At worst, it leaks personal or confidential information to the whole internet.
+
+**Leave out:**
+
+- Employer, client, and vendor names, and internal project, product, or team names.
+- Ticket or issue keys from internal trackers (e.g. `ABC-1234`), including in branch names.
+- Server, instance, host, database, and table names from real systems; IP addresses; cloud account IDs, ARNs, and resource IDs; internal URLs.
+- People's names, emails, and usernames (your own GitHub identity is fine).
+- Credentials, connection strings, keys, and tokens, even expired ones.
+- Real rows, query results, error logs, or plans from production systems.
+
+**Instead:**
+
+- Use generic names: `MyDb`, `MyServer`, `dbo.BigTable`, `Brand1`.
+- Describe the problem by its shape, not its source: "a 500M-row table on a busy production instance" tells me everything I need.
+- Rounded sizes, timings, and versions are fine. They're usually what makes the case.
+
+**If something slips through, tell me right away.** A follow-up commit doesn't remove it. Git history, forks, closed PRs (including their branch names), and notification emails all keep the original. The earlier it gets caught, the more of it can be cleaned up.
+
+This applies to automated agents too. An agent working from a company ticket or a private session must translate that context into generic terms before it writes anything here.
 
 ### ARM64 SQL Edge smoke testing
 
@@ -58,6 +83,7 @@ Automated coding agents follow this document for code conventions and [AGENTS.md
 8. Dynamic SQL goes through `sys.sp_executesql` with real parameters, never string-concatenated values.
 9. `SET NOCOUNT ON;` at the top of every proc.
 10. Wrap every `IF` and `ELSE` body in `BEGIN` and `END`.
+11. Nothing company-specific or personal anywhere: no ticket keys, internal names, people, or real data (see [Keep private information out](#keep-private-information-out)).
 
 The rest of this doc is the *why*.
 

@@ -7,6 +7,7 @@
 - Treat installer scripts and SQL files as operational code: they can create or alter databases and server-level objects. Never run them against production or an instance outside an explicitly designated disposable or development scope. If no such instance is available, report that execution was not verified.
 - Do not run `Get-OpenSourceScripts.ps1` as a validation step. It downloads mutable third-party code into `oss/`, which is intentionally ignored and is not part of this repository's tracked source.
 - Preserve existing user changes. Inspect `git status` before editing and do not overwrite, stage, or discard unrelated work.
+- This repository is public. Follow [Keep private information out](CONTRIBUTING.md#keep-private-information-out): never write employer or client names, internal ticket keys, infrastructure names, personal information, or real production data into code, test objects, commit messages, branch names, issues, or PR text, even when the task came from a private ticket or session. Check all of them before every commit and push.
 
 ## Changes and validation
 
