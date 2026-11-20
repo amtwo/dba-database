@@ -171,11 +171,11 @@ HAVING SUM(rs.count_executions) >= @MinExecs;
         a.QueryTextHash,
         a.query_id,
         a.query_hash,
+        a.object_id,
         s.Execs,
         CpuMs = s.CpuUs / s.Execs / 1000.0,
         Reads = s.ReadsTotal / s.Execs,
-        RowsOut = s.RowsTotal / s.Execs,
-        rn    = ROW_NUMBER() OVER (PARTITION BY a.QueryTextHash ORDER BY s.Execs DESC)
+        RowsOut = s.RowsTotal / s.Execs
     FROM #Active AS a
     JOIN #Stats AS s
         ON s.query_id = a.query_id
@@ -218,9 +218,14 @@ SELECT
 FROM #Active AS n
 JOIN #Stats AS ns
     ON ns.query_id = n.query_id
-JOIN Baseline AS b
-    ON b.QueryTextHash = n.QueryTextHash
-   AND b.rn = 1
+CROSS APPLY (
+    /* Prefer an older variant from the same module. Identical text can live in another module
+       with very different cost, and picking that one can hide the regression. */
+    SELECT TOP (1) bc.query_id, bc.query_hash, bc.Execs, bc.CpuMs, bc.Reads, bc.RowsOut
+    FROM Baseline AS bc
+    WHERE bc.QueryTextHash = n.QueryTextHash
+    ORDER BY CASE WHEN bc.object_id = n.object_id THEN 0 ELSE 1 END, bc.Execs DESC, bc.query_id DESC
+) AS b
 LEFT JOIN sys.query_store_query_hints AS nh
     ON nh.query_id = n.query_id
 LEFT JOIN sys.query_store_query_hints AS bh

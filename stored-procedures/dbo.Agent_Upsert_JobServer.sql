@@ -47,7 +47,7 @@ BEGIN
     CREATE TABLE #sysjobservers
     (
         server_id      INT,
-        server_name    NVARCHAR(30),
+        server_name    SYSNAME,
         enlist_date    DATETIME,
         last_poll_date DATETIME
     );

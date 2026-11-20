@@ -139,18 +139,34 @@ SELECT
     BestRows          = CONVERT(decimal(18, 1), b.RowsPerExec),
     CpuRatio          = CONVERT(decimal(18, 2), l.CpuMsPerExec / NULLIF(b.CpuMsPerExec, 0)),
     ExcessCpuSec      = CONVERT(decimal(18, 1), (l.CpuMsPerExec - b.CpuMsPerExec) * l.Execs / 1000.0),
-    AnyPlanForced     = CASE WHEN EXISTS (SELECT 1 FROM sys.query_store_plan AS fp WHERE fp.query_id = l.query_id AND fp.is_forced_plan = 1) THEN 1 ELSE 0 END,
+    AnyPlanForced     = CASE WHEN cf.plan_id IS NULL THEN 0 ELSE 1 END,
     HintText          = ' + CASE WHEN @SupportsQueryStoreHints = 1
         THEN N'(SELECT STRING_AGG(n.query_hint_text, N''; '') FROM sys.query_store_query_hints AS n WHERE n.query_id = l.query_id)'
         ELSE N'CONVERT(nvarchar(max), NULL)' END + N',
     ForceSql          = N''EXEC sys.sp_query_store_force_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)
                         + N'', @plan_id = '' + CONVERT(nvarchar(20), b.plan_id) + N'';'',
-    RollbackSql       = N''EXEC sys.sp_query_store_unforce_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)
-                        + N'', @plan_id = '' + CONVERT(nvarchar(20), b.plan_id) + N'';''
+    /* Roll back to the forcing state before ForceSql ran: re-force a plan that was already
+       forced, or unforce when nothing was. */
+    RollbackSql       = CASE
+                            WHEN cf.plan_id IS NULL
+                                THEN N''EXEC sys.sp_query_store_unforce_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)
+                                     + N'', @plan_id = '' + CONVERT(nvarchar(20), b.plan_id) + N'';''
+                            WHEN cf.plan_id = b.plan_id
+                                THEN N''-- Plan '' + CONVERT(nvarchar(20), b.plan_id) + N'' was already forced; nothing to roll back.''
+                            ELSE N''EXEC sys.sp_query_store_force_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)
+                                 + N'', @plan_id = '' + CONVERT(nvarchar(20), cf.plan_id) + N'';''
+                        END
 FROM Ranked AS l
 JOIN Ranked AS b
     ON b.query_id = l.query_id
    AND b.BestRn = 1
+OUTER APPLY (
+    SELECT TOP (1) fp.plan_id
+    FROM sys.query_store_plan AS fp
+    WHERE fp.query_id = l.query_id
+      AND fp.is_forced_plan = 1
+    ORDER BY fp.plan_id
+) AS cf
 WHERE l.LatestRn = 1
   AND l.plan_id <> b.plan_id
   AND l.CpuMsPerExec >= @MinCpuRatio * b.CpuMsPerExec
