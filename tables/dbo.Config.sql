@@ -156,10 +156,11 @@ BEGIN
     VALUES ('STATOVERRIDE', 'StatisticsMaint', 'Table Overrides', N'[]')
 END;
 
--- NOTE: the two "never" knobs -- Disable AutoStats Threshold (STATLOCKROW) and Statistics
--- Modification Level (STATMODLVL) -- are intentionally NOT seeded. An absent row leaves the proc
--- parameter NULL (= feature off). Add the row on a server that wants locking / a modification
--- level
+-- NOTE: the "never" knobs -- Disable AutoStats Threshold (STATLOCKROW), Statistics Modification
+-- Level (STATMODLVL), Statistics MAXDOP (STATMAXDOP), and Delay Between Statistics in seconds
+-- (STATDELAY) -- are intentionally NOT seeded. An absent row leaves the proc parameter NULL
+-- (= feature off). Add the row on a server that wants locking / a modification level / an I/O
+-- throttle
 
 
 

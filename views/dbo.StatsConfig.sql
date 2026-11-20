@@ -35,6 +35,8 @@ WITH Defaults AS (
         SkewRatioCutoff              = MAX(CASE WHEN ConfigCode = 'STATSKEWCUT' THEN NumericValue END),
         DisableAutoStatsThreshold    = MAX(CASE WHEN ConfigCode = 'STATLOCKROW' THEN NumericValue END),
         StatisticsModificationLevel  = MAX(CASE WHEN ConfigCode = 'STATMODLVL'  THEN NumericValue END),
+        MaxDOP                       = MAX(CASE WHEN ConfigCode = 'STATMAXDOP'  THEN NumericValue END),
+        StatisticsDelaySeconds       = MAX(CASE WHEN ConfigCode = 'STATDELAY'   THEN NumericValue END),
         LogToTable                   = MAX(CASE WHEN ConfigCode = 'STATLOGTBL'  THEN NumericValue END),
         OverrideJson                 = MAX(CASE WHEN ConfigCode = 'STATOVERRIDE' THEN UnicodeValue END)
     FROM dbo.Config
@@ -59,6 +61,8 @@ SELECT
     d.SkewRatioCutoff,
     d.DisableAutoStatsThreshold,
     d.StatisticsModificationLevel,
+    d.MaxDOP,
+    d.StatisticsDelaySeconds,
     d.LogToTable
 FROM Defaults AS d
 UNION ALL
@@ -81,6 +85,8 @@ SELECT
     d.SkewRatioCutoff,
     d.DisableAutoStatsThreshold,
     d.StatisticsModificationLevel,
+    d.MaxDOP,
+    d.StatisticsDelaySeconds,
     d.LogToTable
 FROM Defaults AS d
 CROSS APPLY OPENJSON(d.OverrideJson)

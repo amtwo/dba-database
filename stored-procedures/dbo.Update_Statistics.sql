@@ -11,6 +11,8 @@ CREATE OR ALTER PROCEDURE dbo.Update_Statistics
     @DisableAutoStatsThreshold  bigint   = NULL,          -- rows >= this -> sp_autostats OFF; NULL = never lock
     @StatisticsModificationLevel int     = NULL,          -- passthrough to the normal pass; NULL = update if modified
     @LogToTable                 bit      = NULL,          -- log Ola commands to dbo.CommandLog
+    @MaxDOP                     tinyint  = NULL,          -- MAXDOP for each UPDATE STATISTICS; NULL = server default
+    @StatisticsDelaySeconds     int      = NULL,          -- pause between statistics; NULL/0 = no pause
     @TimeLimitInMinutes         int      = NULL,          -- whole-run time budget in minutes; NULL = no limit
     @Debug                      bit      = 0              -- 1 = print everything we'd run, change nothing
 AS
@@ -74,6 +76,9 @@ EXAMPLES:
 -- Large tables only, across all user databases (a slower cadence for the giants):
 -- EXEC dbo.Update_Statistics @DbList = N'USER_DATABASES', @Buckets = N'Large';
 
+-- Throttle I/O on a busy server: serial stats, 30 seconds between each statistic:
+-- EXEC dbo.Update_Statistics @DbList = N'USER_DATABASES', @MaxDOP = 1, @StatisticsDelaySeconds = 30;
+
 **************************************************************************************************
 MODIFICATIONS:
     20260715 - AM2 - Initial version. Multi-database wrapper over dbo.Update_StatisticsSingleDB;
@@ -81,6 +86,7 @@ MODIFICATIONS:
     20260716 - AM2 - Pass @Buckets through to the single-DB proc (run only selected size buckets).
     20260803 - AM2 - Add @TimeLimitInMinutes, converted here once into a @StopAtTime deadline that is
                      passed down as a datetime2. Budget is for the whole run, not per database.
+    20261120 - AM2 - Pass @MaxDOP and @StatisticsDelaySeconds through to the single-DB proc.
 **************************************************************************************************
     This code is licensed as part of Andy Mallon's DBA Database.
     https://github.com/amtwo/dba-database/blob/master/LICENSE
@@ -282,7 +288,7 @@ BEGIN
                         ELSE NULL
                      END
     FROM @tmpDatabases AS td
-    INNER JOIN sys.databases AS d ON d.name = td.DatabaseName
+    INNER JOIN sys.databases AS d ON d.name = td.DatabaseName COLLATE DATABASE_DEFAULT  -- table variable uses this db's collation, sys.databases the server's
     LEFT JOIN sys.dm_hadr_availability_replica_states AS ars
         ON ars.replica_id = d.replica_id AND ars.is_local = 1
     WHERE td.Selected = 1;
@@ -346,6 +352,8 @@ BEGIN
                 @DisableAutoStatsThreshold   = @DisableAutoStatsThreshold,
                 @StatisticsModificationLevel = @StatisticsModificationLevel,
                 @LogToTable                  = @LogToTable,
+                @MaxDOP                      = @MaxDOP,
+                @StatisticsDelaySeconds      = @StatisticsDelaySeconds,
                 @StopAtTime                  = @StopAtTime,
                 @Debug                       = @Debug;
         END TRY
