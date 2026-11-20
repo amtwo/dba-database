@@ -288,7 +288,7 @@ BEGIN
                         ELSE NULL
                      END
     FROM @tmpDatabases AS td
-    INNER JOIN sys.databases AS d ON d.name = td.DatabaseName
+    INNER JOIN sys.databases AS d ON d.name = td.DatabaseName COLLATE DATABASE_DEFAULT  -- table variable uses this db's collation, sys.databases the server's
     LEFT JOIN sys.dm_hadr_availability_replica_states AS ars
         ON ars.replica_id = d.replica_id AND ars.is_local = 1
     WHERE td.Selected = 1;
