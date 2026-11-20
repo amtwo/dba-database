@@ -141,8 +141,13 @@ CREATED: 20260601
       WAITFOR between calls. The Small ALL_INDEXES sweep stays one call; the pause comes before and
       after it, not inside it.
     * On an only-modified pass, statistics with modification_counter = 0 aren't called, so there's no
-      pause for a statistic Ola would skip anyway. A pass using @StatisticsModificationLevel still
-      calls every statistic, so a statistic below the level costs a pause but no I/O.
+      pause for a statistic Ola would skip anyway. Counters are read once, before the first call, so a
+      statistic first modified mid-run waits for the next run. A pass using @StatisticsModificationLevel
+      still calls every statistic, so a statistic below the level costs a pause but no I/O.
+    * Statistics Ola never updates (hypothetical, disabled, columnstore, XML, and spatial indexes)
+      get no call. A table with a comma in any statistic name gets one table-level call instead of
+      per-statistic calls, because Ola splits @Indexes on commas.
+    * The pause is capped at the time left before @StopAtTime, and the run stops once it passes.
 
     This is a GENERIC wrapper: all policy lives in dbo.Config data, not in the code. Stock
     IndexOptimize and dbo.Config_Get are dependencies. See the repo README.
@@ -302,6 +307,24 @@ BEGIN
     -- "Never" knobs: no built-in fallback -> absent Config row keeps them NULL (feature off).
     SET @DisableAutoStatsThreshold   = COALESCE(@DisableAutoStatsThreshold,   (SELECT NumericValue FROM @cfg WHERE ConfigCode = 'STATLOCKROW'));
     SET @StatisticsModificationLevel = COALESCE(@StatisticsModificationLevel, (SELECT NumericValue FROM @cfg WHERE ConfigCode = 'STATMODLVL'));
+    -- Check these Config rows before assigning them: tinyint/int can't hold a bad value, so an
+    -- out-of-range row would overflow with a cryptic error and a fractional one would truncate silently.
+    IF @MaxDOP IS NULL
+        AND EXISTS (SELECT 1 FROM @cfg WHERE ConfigCode = 'STATMAXDOP'
+                    AND (NumericValue NOT BETWEEN 0 AND 64 OR NumericValue <> FLOOR(NumericValue)))
+    BEGIN
+        RAISERROR('dbo.Config row STATMAXDOP must be a whole number between 0 and 64.', 16, 1);
+        RETURN;
+    END;
+
+    IF @StatisticsDelaySeconds IS NULL
+        AND EXISTS (SELECT 1 FROM @cfg WHERE ConfigCode = 'STATDELAY'
+                    AND (NumericValue NOT BETWEEN 0 AND 3600 OR NumericValue <> FLOOR(NumericValue)))
+    BEGIN
+        RAISERROR('dbo.Config row STATDELAY must be a whole number of seconds between 0 and 3600.', 16, 1);
+        RETURN;
+    END;
+
     SET @MaxDOP                      = COALESCE(@MaxDOP,                      (SELECT NumericValue FROM @cfg WHERE ConfigCode = 'STATMAXDOP'));
     SET @StatisticsDelaySeconds      = COALESCE(@StatisticsDelaySeconds,      (SELECT NumericValue FROM @cfg WHERE ConfigCode = 'STATDELAY'));
 
@@ -334,7 +357,7 @@ BEGIN
         RETURN;
     END;
 
-    -- Ola accepts MAXDOP 0-64; tinyint already rules out negatives.
+    -- Ola accepts MAXDOP 0-64. A tinyint parameter can't be negative.
     IF @MaxDOP > 64
     BEGIN
         RAISERROR('@MaxDOP must be between 0 and 64, or NULL.', 16, 1);
@@ -906,7 +929,7 @@ BEGIN
         Bucket   = Bucket,
         IsForced = IsNewlyLocked,
         IsSweep  = 0,
-        Indexes  =STRING_AGG(CONVERT(nvarchar(max), @dbQuoted + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'.%'), N','),
+        Indexes  = STRING_AGG(CONVERT(nvarchar(max), @dbQuoted + N'.' + QUOTENAME(SchemaName) + N'.' + QUOTENAME(ObjectName) + N'.%'), N','),
         SamplePercent = EffectiveSample,
         OnlyModified  = CASE WHEN IsNewlyLocked = 1 THEN 'N' ELSE @normalOms END,
         ModLevel      = CASE WHEN IsNewlyLocked = 1 THEN NULL ELSE @normalSml END
@@ -940,8 +963,11 @@ BEGIN
     -- Step 2b: turn passes into IndexOptimize calls. With no delay, one call per pass (unchanged).
     -- With @StatisticsDelaySeconds > 0, each named-table pass becomes one call per statistic so we
     -- can pause between them (Ola's @Delay doesn't cover statistics). The ALL_INDEXES sweep stays
-    -- one call. On an only-modified pass, a statistic with modification_counter = 0 gets no call,
-    -- since Ola would skip it anyway; NULL counters are kept, so we never drop one Ola would update.
+    -- one call. On an only-modified pass, a statistic with modification_counter = 0 at snapshot time
+    -- gets no call, since Ola would skip it; NULL counters are kept. Statistics Ola never updates
+    -- (index types other than 1, 2, 7, or hypothetical/disabled indexes -- Ola's own rule) get no call.
+    -- A table with a comma in any statistic name gets one table-level call, because Ola splits
+    -- @Indexes on commas without regard to brackets.
     -------------------------------------------------------------------------------------------
     CREATE TABLE #Calls (
         CallId        int IDENTITY(1,1) PRIMARY KEY,
@@ -968,7 +994,7 @@ BEGIN
             ObjectName      sysname      NOT NULL,
             RowCount_Alloc  bigint       NOT NULL,
             IsNewlyLocked   bit          NOT NULL,
-            Bucket          varchar(6)   NOT NULL,
+            Bucket          varchar(6)   COLLATE DATABASE_DEFAULT NOT NULL,  -- joined to @Passes, which uses the database collation
             EffectiveSample tinyint      NOT NULL,
             StatsId         int          NOT NULL,
             StatsName       sysname      NOT NULL,
@@ -997,10 +1023,14 @@ BEGIN
             AND o.name = wl.ObjectName COLLATE DATABASE_DEFAULT
         JOIN sys.stats AS s
             ON s.object_id = o.object_id
+        LEFT JOIN sys.indexes AS i
+            ON i.object_id = s.object_id
+            AND i.index_id = s.stats_id
         OUTER APPLY sys.dm_db_stats_properties(s.object_id, s.stats_id) AS sp
         WHERE ISNULL(wl.OvExclude, 0) = 0
           AND wl.Bucket <> ''Exempt''
-          AND NOT (wl.Bucket = ''Small'' AND wl.IsNewlyLocked = 0 AND wl.OvSample IS NULL);';
+          AND NOT (wl.Bucket = ''Small'' AND wl.IsNewlyLocked = 0 AND wl.OvSample IS NULL)
+          AND (i.index_id IS NULL OR (i.is_hypothetical = 0 AND i.is_disabled = 0 AND i.type IN (1, 2, 7)));';
 
         IF @Debug = 1
         BEGIN
@@ -1008,6 +1038,17 @@ BEGIN
         END;
 
         EXEC @dbExec @stmt = @statsSql;
+
+        -- Tables where per-statistic tokens would break Ola's comma split.
+        CREATE TABLE #CommaTables (
+            SchemaName sysname NOT NULL,
+            ObjectName sysname NOT NULL
+        );
+
+        INSERT INTO #CommaTables (SchemaName, ObjectName)
+        SELECT DISTINCT ps.SchemaName, ps.ObjectName
+        FROM #PassStats AS ps
+        WHERE ps.StatsName LIKE N'%,%';
 
         -- One call per statistic for named-table passes, one call for the sweep, in pass order.
         INSERT INTO #Calls (PassName, Bucket, IsForced, Indexes, SamplePercent, OnlyModified, ModLevel)
@@ -1056,6 +1097,35 @@ BEGIN
                 AND ps.EffectiveSample = p.SamplePercent
             WHERE p.IsSweep = 0
               AND (p.OnlyModified = 'N' OR ps.ModCounter IS NULL OR ps.ModCounter > 0)  -- keep NULLs: never drop a stat Ola would update
+              AND NOT EXISTS (
+                  SELECT 1 FROM #CommaTables AS ct
+                  WHERE ct.SchemaName = ps.SchemaName
+                    AND ct.ObjectName = ps.ObjectName
+              )
+            UNION ALL
+            -- Comma-named statistics: one table-level call for the whole table; Ola decides which stats to update.
+            SELECT DISTINCT
+                PassId        = p.PassId,
+                SortRows      = ps.RowCount_Alloc,
+                SortSchema    = ps.SchemaName,
+                SortObject    = ps.ObjectName,
+                SortStatsId   = 0,
+                PassName      = p.PassName,
+                Bucket        = p.Bucket,
+                IsForced      = p.IsForced,
+                Indexes       = CONVERT(nvarchar(max), @dbQuoted + N'.' + QUOTENAME(ps.SchemaName) + N'.' + QUOTENAME(ps.ObjectName) + N'.%'),
+                SamplePercent = p.SamplePercent,
+                OnlyModified  = p.OnlyModified,
+                ModLevel      = p.ModLevel
+            FROM @Passes AS p
+            JOIN #PassStats AS ps
+                ON ps.IsNewlyLocked = p.IsForced
+                AND ps.Bucket = p.Bucket
+                AND ps.EffectiveSample = p.SamplePercent
+            JOIN #CommaTables AS ct
+                ON ct.SchemaName = ps.SchemaName
+                AND ct.ObjectName = ps.ObjectName
+            WHERE p.IsSweep = 0
         ) AS c
         ORDER BY c.PassId, c.SortRows DESC, c.SortSchema, c.SortObject, c.SortStatsId;
     END;
@@ -1071,8 +1141,8 @@ BEGIN
     -- value would hand every call the full budget and overshoot the deadline by a multiple of it.
     DECLARE @timeLimitSeconds int;
 
-    -- WAITFOR DELAY takes a datetime; same construction as Ola's own @Delay.
-    DECLARE @delayTime datetime = DATEADD(SECOND, ISNULL(@StatisticsDelaySeconds, 0), CONVERT(datetime, '19000101'));
+    -- WAITFOR DELAY takes a datetime; same construction as Ola's own @Delay. Set per pause below.
+    DECLARE @delayTime datetime;
 
     DECLARE @passName     varchar(30),
             @passBucket   varchar(6),
@@ -1120,12 +1190,32 @@ BEGIN
             CONTINUE;
         END;
 
-        -- Pause between statistics. Never before the first call, so a run with one call never waits.
-        IF @StatisticsDelaySeconds > 0 AND @callsStarted > 0
+        -- Past the deadline, Ola would start nothing anyway. Stop before pausing, not after.
+        IF @StopAtTime IS NOT NULL AND SYSDATETIME() >= @StopAtTime
         BEGIN
             IF @Debug = 1
             BEGIN
-                SET @msg = N'-- WAITFOR DELAY ' + CONVERT(nvarchar(10), @StatisticsDelaySeconds) + N' seconds';
+                EXEC dbo.Debug_Print @DebugMessage = N'-- @StopAtTime reached. No further calls started.';
+            END;
+            BREAK;
+        END;
+
+        -- Pause between statistics. Never before the first call, so a run with one call never waits.
+        -- Capped at the time left before @StopAtTime, so a long delay can't run past the deadline.
+        IF @StatisticsDelaySeconds > 0 AND @callsStarted > 0
+        BEGIN
+            SET @delayTime = DATEADD(SECOND,
+                                     CASE
+                                         WHEN @StopAtTime IS NOT NULL
+                                              AND DATEDIFF(SECOND, SYSDATETIME(), @StopAtTime) < @StatisticsDelaySeconds
+                                             THEN DATEDIFF(SECOND, SYSDATETIME(), @StopAtTime)
+                                         ELSE @StatisticsDelaySeconds
+                                     END,
+                                     CONVERT(datetime, '19000101'));
+
+            IF @Debug = 1
+            BEGIN
+                SET @msg = N'-- WAITFOR DELAY ' + CONVERT(nvarchar(10), DATEDIFF(SECOND, CONVERT(datetime, '19000101'), @delayTime)) + N' seconds';
                 EXEC dbo.Debug_Print @DebugMessage = @msg;
             END;
             ELSE
@@ -1134,7 +1224,7 @@ BEGIN
             END;
         END;
 
-        -- Past the deadline, Ola would start nothing anyway. Stop here so we don't keep pausing.
+        -- Re-check after the pause.
         IF @StopAtTime IS NOT NULL AND SYSDATETIME() >= @StopAtTime
         BEGIN
             IF @Debug = 1
