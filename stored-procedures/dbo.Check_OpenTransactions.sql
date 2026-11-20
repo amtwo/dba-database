@@ -37,8 +37,6 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --If we're in Debug mode, ignore @DurationThreshold parameter, Always use 1 minute.
 DECLARE @Id int = 1,
         @Spid int = 0,
-        @JobIdHex nvarchar(34),
-        @JobName nvarchar(256),
         @Sql nvarchar(max),
         @EmailFrom varchar(max),
         @EmailBody nvarchar(max),
@@ -137,23 +135,16 @@ BEGIN
     WHERE ID = @Id;
 END;
 
---Convert Hex job_ids for SQL Agent jobs to names.
-WHILE EXISTS(SELECT 1 FROM #OpenTrans WHERE ProgramName LIKE 'SQLAgent - TSQL JobStep (Job 0x%')
+--Convert Hex job IDs for SQL Agent jobs to names.
+-- program_name is client-supplied, so never concatenate it into SQL; SqlAgentJobId_Get validates it.
+-- Only touch msdb when an Agent session is present, so callers without msdb access still work.
+IF EXISTS (SELECT 1 FROM #OpenTrans WHERE ProgramName LIKE N'SQLAgent - TSQL JobStep (Job 0x%')
 BEGIN
-    SELECT @JobIdHex = '', @JobName = '';
-
-    SELECT TOP 1 @ID = ID, 
-            @JobIdHex =  SUBSTRING(ProgramName,30,34)
-    FROM #OpenTrans
-    WHERE ProgramName LIKE 'SQLAgent - TSQL JobStep (Job 0x%';
-
-    SELECT @Sql = N'SELECT @JobName = name FROM msdb.dbo.sysjobs WHERE job_id = ' + @JobIdHex;
-    EXEC sp_executesql @Sql, N'@JobName nvarchar(256) OUT', @JobName = @JobName OUT;
-
-    UPDATE b
-    SET ProgramName = LEFT(REPLACE(ProgramName,@JobIdHex,@JobName),128)
-    FROM #OpenTrans b
-    WHERE ID = @Id;
+    UPDATE t
+    SET ProgramName = LEFT(REPLACE(t.ProgramName, jobId.JobIdHex, jobId.JobName), 128)
+    FROM #OpenTrans t
+    CROSS APPLY dbo.SqlAgentJobId_Get(t.ProgramName) jobId
+    WHERE jobId.JobIdBinary IS NOT NULL;
 END;
 
 -- Populate SessionInfo column with HTML details for sending email

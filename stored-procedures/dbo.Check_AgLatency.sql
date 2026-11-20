@@ -125,7 +125,8 @@ SELECT @@SERVERNAME,
         LTRIM(RTRIM(pc.instance_name)) as DbName,
         pc.cntr_value AS UnsentLogKb
 FROM sys.[dm_os_performance_counters] AS pc
-WHERE pc.object_name LIKE N'%:Database Replica'
+-- object_name is a blank-padded nchar(128), and trailing blanks count in a Unicode LIKE.
+WHERE RTRIM(pc.object_name) LIKE N'%:Database Replica'
 AND pc.counter_name  = 'Log Send Queue';
 
 INSERT INTO #Results (ServerName, AgName, DbName, UnsentLogKb, SynchState, AgHealth, SuspendReason, 
