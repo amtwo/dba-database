@@ -146,7 +146,8 @@ SELECT
     ForceSql          = N''EXEC sys.sp_query_store_force_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)
                         + N'', @plan_id = '' + CONVERT(nvarchar(20), b.plan_id) + N'';'',
     /* Roll back to the forcing state before ForceSql ran: re-force a plan that was already
-       forced, or unforce when nothing was. */
+       forced, or unforce when nothing was. Re-forcing is always MANUAL and primary-only, so a
+       plan that automatic tuning or a replica group forced comes back as a manual force. */
     RollbackSql       = CASE
                             WHEN cf.plan_id IS NULL
                                 THEN N''EXEC sys.sp_query_store_unforce_plan @query_id = '' + CONVERT(nvarchar(20), l.query_id)

@@ -230,11 +230,15 @@ WHILE @@FETCH_STATUS = 0
 BEGIN
     SELECT @SchemaName = NULL, @ObjectName = NULL, @IndexName = NULL;
 
-    -- Resolve names from the target database's catalog views, which honor READ UNCOMMITTED.
-    -- Metadata functions such as OBJECT_NAME() don't, so they wait behind the Sch-M lock being reported.
+    -- Resolve names from the target database's catalog views. Metadata functions such as OBJECT_NAME()
+    -- ignore READ UNCOMMITTED and wait behind the Sch-M lock being reported. The catalog views skip that
+    -- wait only for sysadmin and db_owner; everyone else still checks metadata visibility under Sch-S, so
+    -- the lookup gives up after a second and the description falls back to the raw wait resource.
+    -- SET LOCK_TIMEOUT inside sp_executesql reverts when the batch ends, so the caller's setting is untouched.
     IF @ResourceType IN ('KEY', 'OBJECT', 'TAB') AND @DbName IS NOT NULL
     BEGIN
-        SET @Sql = N'SELECT @SchemaName = s.name, @ObjectName = o.name, @IndexName = i.name ' +
+        SET @Sql = N'SET LOCK_TIMEOUT 1000; ' +
+            N'SELECT @SchemaName = s.name, @ObjectName = o.name, @IndexName = i.name ' +
             N'FROM ' + QUOTENAME(@DbName) + N'.sys.objects o ' +
             N'JOIN ' + QUOTENAME(@DbName) + N'.sys.schemas s ON s.schema_id = o.schema_id ' +
             CASE WHEN @ResourceType = 'KEY'
@@ -252,7 +256,7 @@ BEGIN
                 @SchemaName = @SchemaName OUTPUT, @ObjectName = @ObjectName OUTPUT, @IndexName = @IndexName OUTPUT;
         END TRY
         BEGIN CATCH
-            -- The database is offline, restoring, or unreadable by the caller: report the raw wait resource.
+            -- Lock timeout, or the database is offline, restoring, or unreadable: report the raw wait resource.
             SELECT @SchemaName = NULL, @ObjectName = NULL, @IndexName = NULL;
         END CATCH;
     END;
